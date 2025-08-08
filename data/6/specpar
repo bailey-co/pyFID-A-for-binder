@@ -1,0 +1,39 @@
+##TITLE= Parameter file, TOPSPIN		Version 3.1PV
+##JCAMPDX= 5.0
+##DATATYPE= Parameter Values
+##NPOINTS= 20	$$ modification sequence number
+##ORIGIN= Bruker BioSpin MRI GmbH
+##OWNER= woakden
+$$ 2023-04-21 14:34:20.428 -0400  nmrsu@bruker3
+$$ /opt/PV6.0.1/conf/instr/spect/specpar
+$$ process /opt/PV6.0.1/prog/mod/cprserver
+##$BF1= 300.3
+##$BF2= 300.3
+##$BF3= 300.3
+##$HPPRECH= (0..15)
+-1 0 1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+##$NUC1= <1H>
+##$NUC2= <off>
+##$NUC3= <off>
+##$NUC4= <off>
+##$NUC5= <off>
+##$NUC6= <off>
+##$NUC7= <off>
+##$NUC8= <off>
+##$PRECHAN= (0..15)
+-1 -1 2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+##$RECPRE= (0..15)
+-1 0 1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+##$RECSEL= (0..15)
+0 1 2 0 0 0 0 0 0 0 0 0 0 0 0 0
+##$SELREC= (0..9)
+0 0 0 0 0 0 0 0 0 0
+##$SFO1= 300.3
+##$SFO2= 300.3
+##$SFO3= 300.3
+##$SFO4= 300.3
+##$SFO5= 300.3
+##$SFO6= 300.3
+##$SFO7= 300.3
+##$SFO8= 300.3
+##END=

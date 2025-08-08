@@ -1,0 +1,118 @@
+##TITLE=Parameter List, ParaVision 6.0.1
+##JCAMPDX=4.24
+##DATATYPE=Parameter Values
+##ORIGIN=Bruker BioSpin MRI GmbH
+##OWNER=hynynen
+$$ 2024-09-16 10:52:08.029 -0400  hynynen@bruker3
+$$ /opt/nmrdata/PV6.0.1_data/hynynen/20240916_101717_SKWU1A_Sept16_2024_RK50_HL_SKWU1A_Sept16_20_1_2/6/visu_pars
+$$ process /opt/PV6.0.1/prog/bin/parxserver
+##$VisuVersion=3
+##$VisuUid=( 65 )
+<2.16.756.5.5.100.8323328.42243.1726498326.1>
+##$VisuCreator=( 65 )
+<ParaVision>
+##$VisuCreatorVersion=( 65 )
+<6.0.1>
+##$VisuCreationDate=<2024-09-16T10:52:06,149-0400>
+##$VisuInstanceModality=( 65 )
+<MR>
+##$VisuCoreFrameCount=1
+##$VisuCoreDim=1
+##$VisuCoreSize=( 1 )
+2048
+##$VisuCoreDimDesc=( 1 )
+spectroscopic
+##$VisuCoreExtent=( 1 )
+13.3190134674117
+##$VisuCoreUnits=( 1, 65 )
+<[ppm]>
+##$VisuCoreDataMin=( 1 )
+1.48732202272969
+##$VisuCoreDataMax=( 1 )
+32766.5
+##$VisuCoreDataOffs=( 1 )
+0
+##$VisuCoreDataSlope=( 1 )
+0.00654099716510231
+##$VisuCoreFrameType=( 1 )
+MAGNITUDE_IMAGE
+##$VisuCoreWordType=_16BIT_SGN_INT
+##$VisuCoreByteOrder=littleEndian
+##$VisuSubjectName=( 65 )
+<SKWU1A_Sept16_2024_RK50_HL>
+##$VisuSubjectId=( 65 )
+<SKWU1A_Sept16_2024_RK50_HL>
+##$VisuSubjectUid=( 65 )
+<2.16.756.5.5.100.8323328.16996.1726493790.3>
+##$VisuSubjectInstanceCreationDate=(1726493790, 440, -240)
+##$VisuSubjectBirthDate=( 9 )
+<20240916>
+##$VisuSubjectSex=UNKNOWN
+##$VisuSubjectType=Quadruped
+##$VisuStudyUid=( 65 )
+<2.16.756.5.5.100.8323328.16996.1726496237.79>
+##$VisuStudyDate=<2024-09-16T10:17:17,165-0400>
+##$VisuStudyId=( 65 )
+<SKWU1A_Sept16_2024_RK50_HL_Rat1>
+##$VisuStudyNumber=2
+##$VisuSubjectWeight=0.001
+##$VisuStudyReferringPhysician=( 65 )
+<hynynen>
+##$VisuStudyDescription=( 2048 )
+<\
+>
+##$VisuExperimentNumber=6
+##$VisuProcessingNumber=1
+##$VisuSeriesDate=<2024-09-16T10:52:06,149-0400>
+##$VisuSubjectPosition=Head_Prone
+##$VisuSeriesTypeId=( 65 )
+<ACQ_BRUKER_PVM>
+##$VisuManufacturer=( 65 )
+<Bruker BioSpin MRI GmbH>
+##$VisuAcqSoftwareVersion=( 65 )
+<6.0.1>
+##$VisuInstitution=( 65 )
+<Sunnybrook Research Institute>
+##$VisuStation=( 65 )
+<BioSpec 70/30>
+##$VisuSystemOrderNumber=( 65 )
+<CTO-081-10>
+##$VisuAcqDate=<2024-09-16T10:41:31,024-0400>
+##$VisuAcqEchoTrainLength=1
+##$VisuAcqSequenceName=( 40 )
+<Bruker:PRESS>
+##$VisuAcqNumberOfAverages=1
+##$VisuAcqImagingFrequency=300.322543391596
+##$VisuAcqImagedNucleus=( 8 )
+<1H>
+##$VisuAcqPixelBandwidth=390.625
+##$VisuAcqFlipAngle=90
+##$VisuAcqSize=( 1 )
+2048
+##$VisuAcqImageSizeAccellerated=No
+##$VisuAcqGradEncoding=( 1 )
+no_gradient_enc
+##$VisuAcqEchoTime=( 1 )
+0
+##$VisuAcquisitionProtocol=( 65 )
+<PRESS_1H>
+##$VisuAcqScanTime=625000
+##$VisuAcqAntiAlias=( 1 )
+0
+##$VisuAcqEchoSequenceType=Both
+##$VisuAcqSpinsVelocityEncoded=No
+##$VisuAcqHasTimeOfFlightContrast=No
+##$VisuAcqIsEpiSequence=No
+##$VisuAcqSpectralSuppression=WaterSuppression
+##$VisuAcqKSpaceTraversal=RectilinearTraversal
+##$VisuAcqKSpaceTrajectoryCnt=1
+##$VisuAcqKSpaceFiltering=( 1 )
+NO_WDW
+##$VisuAcqFlowCompensation=FlowNone
+##$VisuAcqSpoiling=GradientSpoiled
+##$VisuAcqMagnetizationTransfer=No
+##$VisuAcqBloodSignalNulling=No
+##$VisuCardiacSynchUsed=No
+##$VisuRespSynchUsed=No
+##END=
+$$ File finished by PARX at 2024-09-16 10:52:08.029 -0400
