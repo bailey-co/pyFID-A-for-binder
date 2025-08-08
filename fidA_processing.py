@@ -217,9 +217,11 @@ def op_addrcvrs(indat,phasept=0,mode='w',coilcombos=None):
                 ph[:,:,:,:,nct,:]=phs[nct]*ph[:,:,:,:,nct,:]
                 sig[:,:,:,:,nct,:]=sigs[nct]*sig[:,:,:,:,nct,:]
         #now apply the phases by multiplying the data by exp(-i*ph);
+        newfid=indat.copy()
         fids=indat.fids*np.exp(-1j*ph*np.pi/180)
         fids_presum=fids
-        specs_presum=fids.specs
+        newfid.fids=fids
+        specs_presum=newfid.specs
         # Apply the amplitude factors my multiplying by the amplitude
         if mode=='w' or mode=='h':
             fids=fids*sig
