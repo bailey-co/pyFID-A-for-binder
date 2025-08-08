@@ -62,8 +62,14 @@ class FID(object):
             self.dims={'t':0}
         self.spectralwidth=spectralwidth
         self.nii_mrs=dict()
-        self.nii_mrs['hdr']=hdr
-        self.nii_mrs['hdr_ext']=hdr_ext
+        if hdr is None:
+            self.nii_mrs['hdr']='no header file'
+        else:
+            self.nii_mrs['hdr']=hdr
+        if hdr_ext is None:
+            self.nii_mrs['hdr_ext']='no header extension'
+        else:
+            self.nii_mrs['hdr_ext']=hdr_ext
         self.nucleus=nucleus
         self.txfreq=txfreq
         self._GAMMA=GAMMA_DICT[self.nucleus[0].upper()]*1e6
