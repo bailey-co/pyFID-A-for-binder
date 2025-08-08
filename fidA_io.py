@@ -63,11 +63,11 @@ class FID(object):
         self.spectralwidth=spectralwidth
         self.nii_mrs=dict()
         if hdr is None:
-            self.nii_mrs['hdr']='no header file'
+            self.nii_mrs['hdr']={'hdr_text':'no header file'}
         else:
             self.nii_mrs['hdr']=hdr
         if hdr_ext is None:
-            self.nii_mrs['hdr_ext']='no header extension'
+            self.nii_mrs['hdr_ext']={'hdr_ext_text':'no header extension'}
         else:
             self.nii_mrs['hdr_ext']=hdr_ext
         self.nucleus=nucleus
