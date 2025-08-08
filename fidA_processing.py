@@ -1,26 +1,18 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Aug 18 12:29:21 2022
-fidA_processing.py
-
-@author: cbailey, based on Matlab code by Jamie Near
-"""
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fft import fft,fftshift,ifft
 from scipy.optimize import curve_fit
-GAMMAP=42.577
+GAMMA_DICT={'1H':42.577,'2H':6.536,'13C':10.7084,'19F':40.078,'23Na':11.262,'31P':17.235}
 
 def add_phase(invec,added_phase):
     """
     Add equal amounts of complex phase to each point of a vector (note this 
-    function operates on a vector rather than a fid object. To operate on the
-    fid object, use 'op_addphase').
+    function operates on a numpy array rather than a fid object. To operate on 
+    the fid object, use 'op_addphase').
 
     Parameters
     ----------
-    invec : input vector
+    invec : Input numpy array
     added_phase : float
         Amount of phase (in degrees) to add.
 
@@ -32,17 +24,21 @@ def add_phase(invec,added_phase):
     """
     return invec*np.exp(1j*added_phase*np.pi/180)
 
-def add_phase1(invec,ppm,timeShift,ppm0=4.65,B0=7):
+def add_phase1(invec,ppm,timeShift,ppm0=4.65,B0=7,nucleus='1H'):
     """
-    Add first order phase to a spectrum (added phase in linearly dependent on 
-    frequency). This function operates on  vector, not a fid-A object. For a
+    Add first order phase to a spectrum (added phase is linearly dependent on 
+    frequency). This function operates on a numpy array, not a fid-A object. For a
     phase shifting function that operates on a fid-A object, see 'op_addphase'
 
     Parameters
     ----------
-    invec : input vector (spectrum)
+    invec : Input numpy array (spectrum)
     ppm : 1D vector
-        Frequency scale (ppm) corresponding to the vector.
+        Frequency scale (ppm). The length of ppm should match the first dimension
+        of invec so that multiplication with invec.T can be done via broadcasting
+        (https://numpy.org/doc/stable/user/basics.broadcasting.html) and then the
+        transposed result returned. If ppm has unnecessary singleton dimensions,
+        eg. [n,1] while invec is [n,3], then multiplication will fail
     timeShift : float
         Amount of 1st order phase shift (specified as horizontal shift in 
         seconds in the time domain).
@@ -51,21 +47,24 @@ def add_phase1(invec,ppm,timeShift,ppm0=4.65,B0=7):
         point will undergo 0 phase shift). The default is 4.65.
     B0 : float, optional
         Magnetic field strength in Tesla (needed to convert ppm to Hz). The default is 7.
+    nucleus : string, optional
+        The nucleus that will be used to determine the gyromagnetic ratio for
+        the ppm to Hz conversion. The 'nucleus' string is used as a key for
+        GAMMA_DICT. The default is '1H'.
 
     Returns
     -------
-    phased_spec : output vector
+    phased_spec : Output numpy array
         1st order phased version of the input.
 
     """
-    f=np.expand_dims((ppm-ppm0)*GAMMAP*B0,axis=tuple(range(1,invec.ndim))) #untested but I think this should work for multidimensional vectors with 1D ppm
-    f=np.tile(f,[1]+list(invec.shape[1:]))
-    # note that f should be in Hz and timeshift in s, so multiplyling them 
-    # gives result in cycles. Multiply by 2*pi to get phase in radians
-    phased_spec=invec*np.exp(-1j*f*timeShift*2*np.pi)
+    f=(ppm-ppm0)*GAMMA_DICT[nucleus.upper()]*B0
+    # f is in Hz and timeshift in s, so multiplyling them gives result in 
+    # cycles. Multiply by 2*pi to get phase in radians
+    phased_spec=(invec.T*np.exp(-1j*f*timeShift*2*np.pi)).T
     return phased_spec
 
-def op_add_noise(indat,sdnoise):
+def op_addNoise(indat,sdnoise):
     """
     Add noise to a spectrum. Useful for simulated data
 
@@ -79,8 +78,10 @@ def op_add_noise(indat,sdnoise):
 
     Returns
     -------
-    outdat : FID object.
+    outdat : FID class.
         output data with noise added
+    noisevec : numpy array
+        The array of Gaussian noise values that were added to the data
     """
     outdat=indat.copy()
     if type(sdnoise) is np.ndarray:
@@ -90,46 +91,47 @@ def op_add_noise(indat,sdnoise):
     outdat.fids=indat.fids+noisevec
     return outdat,noisevec
 
-def op_addphase(indat,ph0,ph1=0,ppm0=4.65,suppressPlot=True):
+def op_addphase(indat,ph0,ph1=0,ppm0=4.65,suppress_plot=True):
     """
-    Add zero and first order phase to the spectrum of an FID object.
+    Add 0th and/or 1st order phase to a the spectrum of a FID object.
 
     Parameters
     ----------
     indat : FID object
-        input data.
+        Phase will be added to this spectrum.
     ph0 : float
-        0th order phase correction in degrees.
+        Zeroth-order phase (in degrees) to be added to FID.fids.
     ph1 : float, optional
-        1st order phase correction in seconds. The default is 0.
+        First-order phase to be added onto FID.specs. The default is 0.
     ppm0 : float, optional
-        frequency reference point in ppm. The default is 4.65.
-    suppressPlot : boolean, optional
-        flag to determine whether figure is suppressed. The default is True
+        The center point at which to calculate the first order phase. The default is 4.65.
+    suppress_plot : boolean, optional
+        Whether to suppress the plot of the final spectrum. Only spectra with
+        fewer than 3 dimensions will be plotted. The default is True.
 
     Returns
     -------
     outdat : FID object
-        phase-adjusted output spectrum.
+        A new FID object with the ph0 and ph1 corrections.
 
     """
     outdat=indat.copy()
     outdat.fids=indat.fids*np.exp(1j*ph0*np.pi/180)
     outdat.added_ph0=indat.added_ph0+ph0
     #Now add 1st-order phase
-    newspec=add_phase1(outdat.specs,indat.ppm,ph1,ppm0,indat.Bo)
-    outdat.set_fid_from_specs(newspec)
+    outdat.specs=add_phase1(outdat.specs,indat.ppm,ph1,ppm0,indat.Bo,indat.nucleus[0])
     outdat.added_ph1=indat.added_ph1+ph1
-    if len(outdat.specs.shape)<3 and not suppressPlot:
-        plt.figure()
-        outdat.plot_spec()
+    if outdat.ndim<3 and not suppress_plot:
+        outdat.plot_spec(xlims=[outdat.ppm[0],outdat.ppm[-1]])
     return outdat
 
 def op_addphaseSubspec(indat,ph0):
     """
     For spectra with two subspectra, add zero order phase to the second 
-    subspectra in a dataset. For example, the edit-on spectrum of a mega-press 
-    acquisition.    
+    subspectra in a dataset. With edited spectroscopy sequences (eg. mega-
+    press), there can be small frequency drifts between edit-on and edit-off 
+    spectra that can result in residual signals from uncoupled spins 
+    (Cr, Ch, etc).
 
     Parameters
     ----------
@@ -145,22 +147,65 @@ def op_addphaseSubspec(indat,ph0):
 
     """
     if indat.dims['coils']>=0:
-        raise TypeError('ERROR: Can not operate on data with multilple coils!  ABORTING!!')
+        raise TypeError('ERROR: Cannot operate on data with multilple coils! ABORTING!!')
     elif indat.dims['averages']>=0:
-        raise TypeError('ERROR: Can not operate on data with multiple averages!  ABORTING!!')
+        raise TypeError('ERROR: Cannot operate on data with multiple averages! ABORTING!!')
     elif indat.dims['subSpecs']<0:
-        raise TypeError('ERROR:  Can not operate on data with no Subspecs!  ABORTING!!')
+        raise TypeError('ERROR: Can not operate on data with no Subspecs! ABORTING!!')
     if indat.sz[indat.dims['subSpecs']]!=2:
-        raise TypeError('ERROR:  Input spectrum must have two subspecs!  ABORTING!!')
+        raise TypeError('ERROR: Input spectrum must have two subspecs! ABORTING!!')
     outdat=indat.copy()
-    outdat.fids[:,1]=outdat.fids[:,1]*np.exp(1j*ph0*np.pi/180)
+    # This slice1 construction should allow the 2nd spectrum of the subSpec 
+    # dimension to be selected for calculation. Keeps function generalizable.
+    slice1=[slice(None)]*outdat.ndim
+    slice1[outdat.dims['subSpecs']]=1
+    outdat.fids[tuple(slice1)]=outdat.fids[tuple(slice1)]*np.exp(1j*ph0*np.pi/180)
     return outdat
-    
+
 def op_addrcvrs(indat,phasept=0,mode='w',coilcombos=None):
-    if indat.flags['addedrcvrs'] or indat.dims['coils']==-1:
-        print('WARNING:  Only one receiver channel found!  Returning input without modification!')
+    """
+    Perform weighted coil recombination for MRS data acquired with receiver
+    coil array.
+
+    Parameters
+    ----------
+    indat : FID object
+        Input data with multiple receiver info.
+    phasept : float, optional
+        Point of fid to use for phase estimation and amplitude when mode='w'. 
+        The default is 0.
+    mode : char, optional
+        Method for estiamting the coil weights and phases if not provided in 
+        coilcombos. Can be:
+            'w' - performs amplitude weighting of channels based on the max 
+                signal of each coil channel
+            'h' - performs amplitude weighting of channles based on the max signal 
+                of each coil channel divided by the square of the noise in each 
+                coil channel (as described by Hall et al. Neuroimage 2014).
+            The default is 'w'.
+    coilcombos : dict with keys 'phs' and 'sigs', optional
+        The predetermined coil phases (in degrees) and amplitudes as generated
+        by op_getcoilcombos. If this argument is provided, the 'point' and 'mode'
+        arguments will be ignored. The default is None.
+
+    Returns
+    -------
+    outdat : FID object
+        The output dataset with coil channels combined.
+    fids_presum : numpy array
+        Input time domain data (fid) with coils phase-adjusted, before combination.
+    specs_presum : numpy array
+        Input frequency domain data (spectrum) with coils phase-adjusted, before 
+        combination.
+    coilcombos : dict with keys 'phs' and 'sigs'
+        The vectors of the coil phases (in degrees) used for alignment and the 
+        coil weights.
+
+    """
+    if indat.flags['addedrcvrs'] or indat.dims['coils']==-1 or indat.sz[indat.dims['coils']]==1:
+        print('WARNING: Only one receiver channel found! Returning input without modification!')
         outdat=indat.copy()
-        outdat.flags['addedrcvrs']=1
+        outdat.flags['addedrcvrs']=True
         fids_presum=indat.fids
         specs_presum=indat.specs
         coilcombos={'phs':0, 'sigs':1}
@@ -169,87 +214,130 @@ def op_addrcvrs(indat,phasept=0,mode='w',coilcombos=None):
         if not indat.flags['averaged']:
             av=op_averaging(indat)
         else:
-            av=indat
+            av=indat.copy()
         # also, for best results, we will combine all subspectra:
         if coilcombos is None:
             if indat.flags['isFourSteps']:
                 av=op_fourStepCombine(av)
             if indat.dims['subSpecs']>-1:
                 av=op_combinesubspecs(av,'summ')
-        avfids=av.fids
-        # Find the relative phases between the channels and populate the ph matrix
-        # Won't avfids have different size depending on the size of fids??
         if coilcombos is None:
-            # Jamie unwraps the phase in the Matlab version but only ever uses the angle. Maybe for viewing? Leaving it wrapped for now
-            phs=[np.angle(avfids[phasept,nct])*180/np.pi for nct in range(avfids.shape[1])]
-            if mode=='w':
-                sigs=np.abs(avfids[phasept,:])
-            elif mode=='h':
-                S=np.max(np.abs(avfids[:,:]),axis=0)
-                N=np.std(avfids[-100:,:],axis=0)
-                sigs=S/(N**2)
-        else:
-            phs=coilcombos['phs']
-            sigs=coilcombos['sigs']
-        #now replicate the phase matrix to equal the size of the original matrix:
-        sigs=sigs/np.linalg.norm(sigs.flatten())
+            # Code was repeated in Matlab rather than calling function
+            coilcombos=op_getcoilcombos(av,phasept=phasept,mode=mode)
+        phs=coilcombos['phs']
+        sigs=coilcombos['sigs']/np.linalg.norm(coilcombos['sigs'].flatten())
+        # now expand these matrices to match the size of indat.fids for 
+        # multiplication. Each coil has a different phase and amplitude
         ph=np.ones(indat.sz)
         sig=np.ones(indat.sz)
-        # and then adjust the phase in each dimension
-        if indat.dims['coils']==0:
-            for nct in range(indat.sz[0]):
-                ph[nct,:]=phs[nct]*ph[nct,:]
-                sig[nct,:]=sigs[nct]*sig[nct,:]
-        elif indat.dims['coils']==1:
-            for nct in range(indat.sz[1]):
-                ph[:,nct,:]=phs[nct]*ph[:,nct,:]
-                sig[:,nct,:]=sigs[nct]*sig[:,nct,:]
-        elif indat.dims['coils']==2:
-            for nct in range(indat.sz[2]):
-                ph[:,:,nct,:]=phs[nct]*ph[:,:,nct,:]
-                sig[:,:,nct,:]=sigs[nct]*sig[:,:,nct,:]
-        elif indat.dims['coils']==3:
-            for nct in range(indat.sz[3]):
-                ph[:,:,:,nct,:]=phs[nct]*ph[:,:,:,nct,:]
-                sig[:,:,:,nct,:]=sigs[nct]*sig[:,:,:,nct,:]
-        elif indat.dims['coils']==4:
-            for nct in range(indat.sz[4]):
-                ph[:,:,:,:,nct,:]=phs[nct]*ph[:,:,:,:,nct,:]
-                sig[:,:,:,:,nct,:]=sigs[nct]*sig[:,:,:,:,nct,:]
-        #now apply the phases by multiplying the data by exp(-i*ph);
-        newfid=indat.copy()
+        slice1=[slice(None)]*indat.fids.ndim
+        for nct in range(indat.sz[indat.dims['coils']]):
+            slice1[indat.dims['coils']]=nct
+            ph[tuple(slice1)]=phs[nct]
+            sig[tuple(slice1)]=sigs[nct]
+        
+        # now apply the phases by multiplying the data by exp(-i*ph);
         fids=indat.fids*np.exp(-1j*ph*np.pi/180)
-        fids_presum=fids
-        newfid.fids=fids
-        specs_presum=newfid.specs
-        # Apply the amplitude factors my multiplying by the amplitude
-        if mode=='w' or mode=='h':
-            fids=fids*sig
+        fidobj_presum=indat.copy()
+        fidobj_presum.fids=fids
+        fids_presum=fidobj_presum.fids
+        specs_presum=fidobj_presum.specs
+        fids=fids*sig
         #Make the coilcombos structure:
         coilcombos={'phs':phs,'sigs':sigs}
         #now sum along coils dimension
         fids=np.sum(fids,axis=indat.dims['coils'])
-        fids=np.squeeze(fids)
         outdat=indat.copy()
-        outdat.fids=fids
+        outdat.fids=np.squeeze(fids)
         # change the dims variables
-        for dimnm in indat.dims.keys():
-            if indat.dims[dimnm]>indat.dims['coils']:
-                outdat.dims[dimnm]=outdat.dims[dimnm]-1
-        outdat.dims['coils']=-1
+        outdat._remove_dim_from_dict('coils')
         outdat.flags['addedrcvrs']=True
         outdat.flags['writtentostruct']=True      
     return outdat,fids_presum,specs_presum,coilcombos
 
-def op_combinesubspecs(indat,tmp):
-    pass
-    
-# replaced op_addscans with the __add__ method in the FID object
+def op_addScans(indat1,indat2,subtract=False):
+    """
+    Add or subtract two scans. This function exists for those replicating
+    Matlab work. However, the __add__ method is defined for the FID object 
+    so that users can just call indat1+indat2 or indat1-indat2 directly.
 
-def op_align_scans(inref, in1, tmax=None,mode='fp'):
-    out1=in1.copy()
+    Parameters
+    ----------
+    indat1 : FID object
+        First spectrum to add.
+    indat2 : FID object
+        Second spectrum to add.
+    subtract : BINARY, optional
+        Indicates whether to or subtract (True or non-zero int) or add (False 
+        or 0) the two spectra. The default is False.
+
+    Returns
+    -------
+    outdat : FID object
+        The output resulting from adding (or subtracting) indat1 and indat2.
+
+    """
+    # I don't fully understand this case but Jamie includes it in Matlab for the
+    # case of looping through multiple spectra. However, seems to assume that
+    # input will be an empty structure for index 0, whereas Python is itself
+    # 0-based for arrays. So this may not be what I want. Any such loops in 
+    # processing functions should likely just use Python's sum function with an
+    # appropriate start value. eg. sum(list_of_fids,start=0*list_of_fids[0])
+    if indat1 is None:
+        indat1=0*indat2
+    if indat1.sz != indat2.sz:
+        raise Exception('ERROR:  Spectra must be the same number of points')
+    if indat1.spectralwidth != indat2.spectralwidth:
+        raise Exception('ERROR:  Spectra must have the same spectral width')
+    # No need to check dwelltime since it is automatically defined by spectral 
+    # width, but I've added a check to central frequency, which is the final 
+    # check needed to ensure that both spectra have the same ppm.
+    if indat1.center_freq_ppm != indat2.center_freq_ppm:
+        raise Exception('ERROR:  Spectra must have the same central frequency')
+    if subtract: #addition case
+        outdat=indat1-indat2
+    else: # subtraction case
+        outdat=indat1+indat2
+    return outdat
+
+# Matlab fidA has a huge number of align functions. I have attempted to simplify
+# and avoid duplicating code. However, I did create functions with the Matlab
+# names for those familiar with the Matlab calls. The "fundamental" alignment
+# function here in Python with the fitting functions is op_alignScans
+def op_alignAllScans(inlist, tmax=0.5, ref='f', mode='fp',freq_range=None):
+    # Make sure input is a list of length 2 or greater
+    if type(inlist) is not list or len(inlist)<2:
+        TypeError('ERROR: The input must be a list of two ore more MRS datasets in FID-A FID object form. ABORTING!!')
+    # Figure out what reference spectrum will be
+    if ref=='f':
+        inref=inlist[0]
+    elif ref=='a':
+        inref=sum(inlist,inlist[0]*0)/len(inlist) # you have to provide a start value for sum of type FID. Otherwise it uses 0
+    else:
+        TypeError('ERROR: Reference spectrum not recognized.')
+    ampref=np.max(np.abs(inref))
+    outlist=[inlist[0]]
+    phlist=[0]; frqlist=[0]
+    for eachspec in inlist[1:]:
+        amp1=np.max(np.abs(eachspec))
+        [dummyOut,dummy_ph,dummy_frq]=op_alignScans(inref, eachspec*ampref/amp1, tmax=tmax, mode=mode, freq_range=freq_range)
+        phlist.append(dummy_ph)
+        frqlist.append(dummy_ph)
+        outlist.append(op_addphase(op_freqshift(eachspec,dummy_frq),dummy_ph))
+    return outlist, phlist, frqlist
+
+def op_alignAllScans_fd(inlist, fmin, fmax, tmax=0.5, ref='f', mode='fp'):
+    outlist,phlist,frqlist=op_alignAllScans(inlist, tmax, ref=ref, mode=mode,freq_range=[fmin,fmax])
+    return outlist, phlist, frqlist
+
+def op_alignScans(inref, infloat, tmax=0.5, mode='fp', freq_range=None, initPars=None):
+    # Based on the Matlab code. The idea here is that we have parameters operating
+    # on complex data, but least squares calculation for minimizing will do 
+    # strange things with complex data. So one alternative is to concatenate the
+    # real and imaginary parts of the data into a single vector, twice as long
+    # and compare all components.
     def freqShiftComplexNest(in2,f):
-        t=np.r_[0:(len(in2))*in1.dwelltime:in1.dwelltime]
+        t=np.linspace(0,len(in2)*infloat.dwelltime,len(in2)+1)[:-1]#np.r_[0:(len(in2))*infloat.dwelltime:infloat.dwelltime]
         fid1=in2.flatten()
         y=fid1*np.exp(-1j*t.T*f*2*np.pi)
         y=np.r_[np.real(y),np.imag(y)]
@@ -260,91 +348,332 @@ def op_align_scans(inref, in1, tmax=None,mode='fp'):
         y=np.r_[np.real(y),np.imag(y)]
         return y
     def freqPhaseShiftComplexNest(in2,f,p):
-        t=np.r_[0:(len(in2))*in1.dwelltime:in1.dwelltime]
+        t=np.linspace(0,len(in2)*infloat.dwelltime,len(in2)+1)[:-1]#np.r_[0:(len(in2))*infloat.dwelltime:infloat.dwelltime]
         fid1=in2.flatten()
         y=add_phase(fid1*np.exp(-1j*t.T*f*2*np.pi),p)
         y=np.r_[np.real(y),np.imag(y)]
         return y
-    # Note: don't need separate functions for final fid calculation because you
-    # can just use existing op_freqshift and op_addphase functions with the 
-    # fitted parameters (or defaults in 'f' and 'p' modes, as appropriate)
-    if not inref.flags['addedrcvrs'] or not in1.flags['addedrcvrs']:
-        raise TypeError('ERROR: Only makes sense to do this after channels have been combined.')
-    # Jamie's original code also has a check that neither inref nor in1 is averaged, which doesn't make sense to me
-    initpars=[0]*len(mode)
-    if tmax is None:
+    
+    # Jamie runs a bunch of checks and I'm not sure whether they are all necessary
+    # However, I'm also running into problems because of the way that the flags
+    # work (if there was no 'coils' dimension initially then flags['addedrcvrs']
+    # will be False even though there is only 1 coil dimension). Similarly for
+    # averages. I think that this should probably be fixed in FID.__init__ so 
+    # that the initial flags match up with the dimension we start with, but
+    # it's also possible to fix it here.
+    # I've been working on more generalizable functions that accept multi-dimensional
+    # input and work regardless which axis things are applied to. But I don't 
+    # think that makes sense in this case because it's a fitting function and
+    # everything needs to get into 1D, including concatenating real and imag parts
+    # So I think the initial check should be whether the data are 1D and other
+    # checks only run if that fails, as a way to provide extra info about what
+    # needs to be done (averaging, coil combination, etc.)
+    if not (inref.ndim==1 and infloat.ndim==1):
+        if not inref.flags['addedrcvrs'] or not infloat.flags['addedrcvrs']:
+            raise TypeError('ERROR: Only makes sense to do this after channels have been combined using op_addrcvrs. ABORTING!!')
+        if not inref.flags['averaged'] or not infloat.flags['averaged']:
+            raise TypeError('ERROR: Only makes sense to do this after you have combined averages using op_averaging. ABORTING!!')
+        if not inref.flags['isFourSteps'] or not infloat.flags['isFourSteps']:
+            raise TypeError('ERROR: Only makes sense to do this after you have performed op_fourStepCombine. ABORTING!!')
+        raise Exception('ERROR: Data appear to have more than 1 dimension. ABORTING!! \ninref.ndim={:d} and infloat.ndim={:d}'.format(inref.ndim, infloat.ndim))
+    if initPars is None:
+        initPars=[0]*len(mode)
+    if tmax>inref.t[-1]:
         tmax=inref.t[-1]
     # curve_fit needs an array of floats to fit to, so putting the real and imaginary components
     # into one longer real-valued vector for fitting
-    baseref=np.r_[np.real(inref.fids[np.logical_and(inref.t>=0,inref.t<tmax)]),np.imag(inref.fids[np.logical_and(inref.t>=0,inref.t<tmax)])]
+    if freq_range is not None:
+        inref_range=op_freqrange(inref, freq_range[0], freq_range[1])
+        infloat_range=op_freqrange(infloat, freq_range[0], freq_range[1])
+    else:
+        inref_range=inref
+        infloat_range=infloat
+    baseref=np.r_[np.real(inref_range.fids[np.logical_and(inref_range.t>=0,inref_range.t<tmax)]),np.imag(inref_range.fids[np.logical_and(inref_range.t>=0,inref_range.t<tmax)])]
     if mode=='f':
-        parsFit,pcov=curve_fit(freqShiftComplexNest,in1.fids[np.logical_and(in1.t>=0,in1.t<tmax)].squeeze(),baseref.squeeze(),initpars)
+        # But here send in complex-valued in1.fids for the same t range because
+        # the real and imaginary parts will be separated after frq and ph adjustment
+        parsFit,pcov=curve_fit(freqShiftComplexNest,infloat_range.fids[np.logical_and(infloat_range.t>=0,infloat_range.t<tmax)].squeeze(),baseref.squeeze(),initPars, maxfev=5000)
         frq=parsFit[0]; ph=0;
     elif mode=='p':
-        parsFit,pcov=curve_fit(phaseShiftComplexNest,in1.fids[np.logical_and(in1.t>=0,in1.t<tmax)].squeeze(),baseref.squeeze(),initpars)
+        parsFit,pcov=curve_fit(phaseShiftComplexNest,infloat_range.fids[np.logical_and(infloat_range.t>=0,infloat_range.t<tmax)].squeeze(),baseref.squeeze(),initPars, maxfev=5000)
         ph=parsFit[0]; frq=0;
     elif mode=='fp' or mode=='pf':
-        parsFit,pcov=curve_fit(freqPhaseShiftComplexNest,in1.fids[np.logical_and(in1.t>=0,in1.t<tmax)].squeeze(),baseref.squeeze(),initpars)
+        parsFit,pcov=curve_fit(freqPhaseShiftComplexNest,infloat_range.fids[np.logical_and(infloat_range.t>=0,infloat_range.t<tmax)].squeeze(),baseref.squeeze(),initPars, maxfev=5000)
         frq=parsFit[0]; ph=parsFit[1];
     else:
         raise TypeError('ERROR: unrecognized mode. Please enter either "f", "p" or "fp"')
-    out1.fids=op_addphase(op_freqshift(in1,frq),ph)
+    # Note: don't need separate functions for final fid calculation because you
+    # can just use existing op_freqshift and op_addphase functions with the 
+    # fitted parameters (or defaults in 'f' and 'p' modes, as appropriate).
+    # And you want to apply to the full spectrum, not just selected frequency range
+    out1=op_addphase(op_freqshift(infloat,frq),ph)
+    return out1, ph, frq
+
+def op_alignScans_fd(inref, infloat, fmin, fmax, tmax=0.5, mode='fp'):
+    out1,ph,frq=op_alignScans(inref, infloat, tmax=tmax, mode=mode, freq_range=[fmin,fmax])
     return out1, ph, frq
     
-def op_alignScans_fd(in1, inref, ppmmin, ppmmax, tmax=0.1, mode='fp'):
-    if not inref.flags['addedrcvrs'] or not in1.flags['addedrcvrs']:
-        raise TypeError('ERROR: Only makes sense to do this after channels have been combined. ABORTING!')
-    if not inref.flags['averaged'] or not in1.flags['averaged']:
-        raise TypeError('ERROR: Only makes sense to do this after you have combined averages using op_averaging. ABORTING!')
-    if inref.flags['isFourSteps'] or in1.flags['isFourSteps']:
-        raise TypeError('ERROR: Only makes sense to do this after you have performed op_fourStepCombine. ABORTING!')
+def op_alignAverages(indat,tmax=None,med='n',ref=None,freq_range=None):
+    outdat=indat.copy()
+    fs=0; phs=0;
+    if not indat.flags['addedrcvrs']:
+        print('ERROR: I think it only makes sense to do this after ou have combined the channels using op_addrcvrs. ABORTING!!')
+    elif indat.dims['averages']==-1 or indat.sz[indat.dims['averages']]==1:
+        print('WARNING: No averages found. Returning input without modification')
+    else:
+        if tmax is None:
+            print('tmax not supplied. Calculating when SNR drops below 5...')
+            sig=np.abs(indat.fids)
+            noise=np.std(np.real(indat.fids[np.ceil(0.75*indat.shape[0]):,...]),axis=0)
+            noise=np.mean(noise.flatten())
+            tmaxest=np.zeros([sig.shape[0],])
+            slice1=[0]*sig.ndim
+            slice1[0]=slice(None)
+            for rowct in sig.shape[0]:
+                slice1[1]=rowct
+                tmaxest[rowct]=indat.t[np.nonzero(sig[tuple(slice1)]/noise>5)[0][-1]]
+            tmax=np.median(tmaxest)
+            print('tmax = {:.2e} ms'.format(tmax*1000))
+        if med.lower()=='r' and ref is None:
+            raise Exception("ERROR:  If using the 'r' option for input variable 'med', then an argument for 'ref' must be provided")
+        if indat.dims['subSpecs']==-1:
+            B=1
+        else:
+            B=indat.sz[indat.dims['subSpecs']]
+        # Note that this function is not as generalizable as some others. It 
+        # assumes that you only have averages and/or subSpecs, with the averages
+        # dimension before subSpecs. This makes some sense because the fitting
+        # function needs a 1D vector to run least squares minimization so you 
+        # won't have "extra" dimensions, although order isn't necessarily known.
+        # For SVS, multi-receiver data are ruled out by the addedcrvrs check but
+        # spatial data from MRS are not.
+        fs=np.zeros([indat.sz[indat.dims['averages']],B]) # Will squeeze everything before return
+        phs=np.zeros_like(fs)
+        newfid=np.zeros([indat.sz[indat.dims['t']],indat.sz[indat.dims['averages']],B])
+        for mct in range(B):
+            # Create a slice to select the mct'th subspec
+            subspec_pts=[slice(None)]*indat.ndim
+            if indat.dims['subSpecs']!=-1:
+                subspec_pts[indat.dims['subSpecs']]=mct
+            # after this, tmpfid should no longer have a subSpecs dimension, even if indat did (removed during slicing)
+            tmpfid=indat[tuple(subspec_pts)]
+            if med.lower()=='y':
+                ref2=op_median(tmpfid)
+                indmin=-1
+            elif med.lower()=='a':
+                ref2=op_averaging(tmpfid)
+                indmin=-1
+            elif med.lower()=='n':
+                # This function isn't finished. Also, Jamie seems to write it in
+                # to op_alignAverages separately rather than calling the function.
+                # So will need to check that what the function returns is what 
+                # is needed by op_alignAverages
+                ref2,metric,badavgs=op_rm_bad_averages(tmpfid)
+                # Is this right or how does the shape of metric behave when tmpfid has subspecs vs doesn't?
+                try:
+                    indmin=np.argmin(metric[:,mct])
+                except IndexError:
+                    indmin=np.argmin(metric)
+            elif med.lower()=='f':
+                # Not sure why this option isn't available in Matlab but makes
+                # sense to add it
+                first_pts=[slice(None)]*tmpfid.ndim
+                first_pts[tmpfid.dims['averages']]=0
+                ref2=tmpfid[tuple(first_pts)]
+                indmin=0
+            elif med.lower()=='r':
+                # The assumption here is that, if indat has subSpecs, then ref 
+                # also has subSpecs and each subSpec is meant to be aligned to its
+                # own subSpec reference
+                ref2=ref[tuple(subspec_pts)]
+                indmin=-1
+            else:
+                raise TypeError("ERROR: Invalid value for 'med'. Allowed values are 'y', 'a', 'n', 'f' and 'r'.")
+            for avct in range(indat.sz[indat.dims['averages']]):
+                # I've defined the size and dimension order of newfid already so
+                # I can define this slicing object directly. But there may be problems
+                # if indat.dims has subSpecs before averages.
+                newfidslice=[slice(None)]*tmpfid.ndim
+                newfidslice[tmpfid.dims['averages']]=avct
+                #newfidslice=tuple([slice(None),avct,mct])
+                if avct==indmin:
+                    whichpts2=[slice(None)]*tmpfid.ndim
+                    whichpts2[tmpfid.dims['averages']]=indmin
+                    newfid[newfidslice]=tmpfid[tuple(whichpts2)]
+                    fs[avct,mct]=0
+                    phs[avct,mct]=0
+                else:
+                    tmpobj,phs[avct,mct],fs[avct,mct]=op_alignScans(ref2, tmpfid[tuple(newfidslice)], tmax=tmax, mode='fp', freq_range=freq_range)
+                    newfid[:,avct,mct]=tmpobj.fids
+        if outdat.dims['averages']>outdat.dims['subSpecs'] and outdat.dims['subSpecs']!=-1:
+            # I don't think it should be the case for any fidA_io loaders, which 
+            # should put averages before subSpecs, but just in case, this will
+            # keep the original dimensions and change the order of newfid to match
+            outdat.fids=np.transpose(newfid,[0,2,1])
+        else:
+            outdat.fids=np.squeeze(newfid)
+        outdat.flags['freqcorrected']=True
+        return outdat,np.squeeze(fs),np.squeeze(phs)
+    
+def op_alignAverages_fd(indat, minppm, maxppm, tmax=None, med='n', ref=None):
+    out1,ph,frq=op_alignAverages(indat, tmax=tmax, med=med, ref=ref, freq_range=[minppm, maxppm])
+    return out1, ph, frq
 
-    baserange=op_freqrange(inref,ppmmin,ppmmax)
-    startrange=op_freqrange(in1,ppmmin,ppmmax)
-    # Rather than repeat the freqShiftComplexNext etc function here, I think that I can just call op_align_scans with the partial spectral in the frequency range
-    outtmp,ph0,frq=op_align_scans(baserange, startrange, tmax=tmax,mode=mode)
-    # That gives the values for aligning those sections but then need to apply
-    # to the full spectrum
-    out1=op_addphase(op_freqshift(in1,frq),ph0)
-    return out1, ph0, frq
+def op_alignISIS(indat,tmax=0.5, freq_range=None, initPars=None):
+    # I don't think I can pass to alignScans here because I only phase the second
+    # spectrum before combining
+    def freqPhaseShiftComplexNest(in2,f,p):
+        t=np.linspace(0,len(in2)*infloat_range.dwelltime,len(in2)+1)[:-1]
+        shifted=add_phase(in2[:,1]*np.exp(-1j*t.T*f*2*np.pi),p)
+        subtracted=(input[:,0]+shifted)/2
+        y=np.r_[np.real(subtracted),np.imag(subtracted)]
+        return y
+    
+    if indat.flags['addedrcvrs']:
+        raise Exception('ERROR: I think it only makes sense to do this after you have combined the channels using op_addrcvrs. ABORTING!')
+    if indat.dims['subSpecs']==-1:
+        raise Exception('ERROR: Must have multiple subspectra. ABORTING!')
+    # Okay, I think that I somewhat get this in that there should only ever be
+    # a max dimension size of 2 in the subspec dimension because different reps
+    # of subspec pairs will be contained in the 'averages' dimension. And so if
+    # you want to align all subspecs then you basically go through an align each
+    # pair of subspecs, then combine subspecs, then call op_alignAverages to align each
+    # rep. BUT it still makes no sense to me that the base0 that we're aligning
+    # to is the combined subspec and then we're only aligning the second subspec.
+    # Surely, you would align to the paired first subspec OR to the average of 
+    # all second subspecs or something. Here, if there is only one average, then
+    # the least squares should always give you [0,0]?? Anyway, op_alignMPSubspecs
+    # seems to work more like I would expect
+    if indat.dims['averages']>-1:
+        fs=np.zeros(indat.sz[indat.dims['averages']])
+        phs=np.zeros_like(fs)
+        #newsize=[eachdim for dimct,eachdim in enumerate(indat.sz) if dimct!=indat.dims['averages']]
+    newfid=np.zeros(indat.sz)
+    if initPars is None:
+        initPars=[0]*2
+    if tmax>indat.t[-1]:
+        tmax=indat.t[-1]
+    print('Aligning all averages to the Average ISIS subtracted spectrum')
+    if indat.dims['averages']>-1:
+        base0=op_median(op_combinesubspecs(indat, 'diff'))
+    else:
+        base0=op_combinesubspecs(indat, 'diff')
+    if freq_range is not None:
+        inref_range=op_freqrange(base0, freq_range[0], freq_range[1])
+        infloat_range=op_freqrange(indat, freq_range[0], freq_range[1])
+    else:
+        inref_range=base0
+        infloat_range=indat
+    baseref=np.r_[np.real(inref_range.fids[np.logical_and(inref_range.t>=0,inref_range.t<tmax)]),np.imag(inref_range.fids[np.logical_and(inref_range.t>=0,inref_range.t<tmax)])]
+        
+    if indat.dims['averages']>-1:
+        for avct in range(indat.dims['averages']):
+            av_slice=[slice(None)]*infloat_range.ndim
+            av_slice[indat.dims['averages']]=avct
+            av_slice[indat.dims['t']]=slice(np.argwhere(inref_range.t>=0).squeeze()[0],np.argwhere(inref_range.t<tmax).squeeze()[-1])
+            parsFit,pcov=curve_fit(freqPhaseShiftComplexNest,infloat_range.fids[tuple(av_slice)].squeeze(),baseref.squeeze(),initPars, maxfev=5000)
+            fs[avct]=parsFit[0]; phs[avct]=parsFit[1];
+            spec_slice=[slice(None)]*infloat_range.ndim
+            spec_slice[indat.dims['averages']]=avct
+            spec_slice[indat.dims['subSpecs']]=1
+            newfid[tuple(spec_slice)]=add_phase(infloat_range.fids[tuple(spec_slice)]*np.exp(-1j*infloat_range.t*fs[avct]*2*np.pi),phs[avct])
+            spec_slice[indat.dims['subSpecs']]=0
+            newfid[tuple(spec_slice)]=infloat_range.fids[tuple(spec_slice)]
+    else:
+        parsFit,pcov=curve_fit(freqPhaseShiftComplexNest,infloat_range.fids[np.logical_and(infloat_range.t>=0,infloat_range.t<tmax),...].squeeze(),baseref.squeeze(),initPars, maxfev=5000)
+        fs=parsFit[0]; phs=parsFit[1];
+        spec_slice=[slice(None)]*infloat_range.ndim
+        spec_slice[infloat_range.dims['subSpecs']]=1
+        newfid[tuple(spec_slice)]=add_phase(infloat_range[tuple(spec_slice)].fids*np.exp(-1j*infloat_range.t*fs*2*np.pi),phs)
+        spec_slice[infloat_range.dims['subSpecs']]=0
+        newfid[tuple(spec_slice)]=infloat_range.fids[tuple(spec_slice)]
+    outdat=indat.copy()
+    outdat.fids=newfid
+    outdat.flags['freqcorrected']=True
+    return outdat, phs, fs
 
-def op_align_all_scans(indat,fmin=2.8,fmax=3.1,ref='first',mode='fp'):
+def op_alignMPSubpsecs(indat,mode='o',initPars=None,ppmWeights=None,freq_range=None):
+    # No tmax since work is done on the frequency spectrum
+    # This one also needs its own fitting function because it is comparing the
+    # spectra, not the fid, and the weights are for the points on the spectrum
+    def freqPhaseShiftComplexNest(in2,f,p):
+        t=np.linspace(0,len(in2)*infloat.dwelltime,len(in2)+1)[:-1]
+        shiftedFids=add_phase(in2*np.exp(-1j*t.T*f*2*np.pi),p)
+        shiftedSpecs=fftshift(ifft(shiftedFids,axis=0),axes=0)
+        y=np.r_[np.real(shiftedSpecs),np.imag(shiftedSpecs)]
+        return y
+    if not indat.flags['addedrcvrs']:
+        raise Exception('ERROR: I think it only makes sense to do this after you have combined the channels using op_addrcvrs. ABORTING!!')
+    if indat.dims['subSpecs']==-1:
+        raise Exception('ERROR: Must have multiple subspectra. ABORTING!!')
+    if indat.dims['averages']==-1:
+        # I think you could loop averages like in op_alignISIS. Why is this not done?
+        raise Exception('ERROR: Signal averaging must be performed before this step. ABORTING!!')
+    if not (indat.sz==2 and indat.sz[indat.dims['subSpecs']]==2):
+        raise Exception('ERROR: Expecting FID object with 2-dimensions and subSpecs dimension with size 2')
+    if ppmWeights is None:
+        ppmWeights=np.ones_like(indat.ppm)
+    if initPars is None:
+        initPars=[0]*2
+    # Do basic error check on ppmWeights
+    if len(ppmWeights)!=len(indat.ppm) or np.min(ppmWeights)<0:
+        raise Exception('ERROR: ppmWeights must be a vector of real positive weights the same size as indat.ppm')
+    if freq_range is not None:
+        inpart=op_freqrange(indat, freq_range[0], freq_range[1])
+    else:
+        inpart=indat
+    # Now adjust weights to be the same size as the frequency-limited spectrum
+    if freq_range is not None:
+        idxs=np.argwhere((indat.ppm>freq_range[0]) * (indat.ppm<freq_range[1])).squeeze()
+        ppmWeights=ppmWeights[idxs]
+    # Normalize weights
+    ppmWeights=ppmWeights/np.sum(ppmWeights)
+    print('Aligning the MEGA-PRESS edit-ON sub-spectrum to the edit-OFF sub-spectrum')
+    base0=op_takesubspec(inpart,0)
+    base=np.r_[np.real(base0.specs),np.imag(base0.specs)]
+    infloat=op_takesubspec(inpart, 1)
+    # Matlab's nlinfit uses weights, while scipy's curve_fit weights residuals based
+    # on sigma=1/sqrt(w)
+    parsFit,pcov=curve_fit(freqPhaseShiftComplexNest,infloat.fids,base,initPars, sigma=1/(ppmWeights), maxfev=5000)
+    fs=parsFit[0]; phs=parsFit[1];
+    if mode.lower()=='o':
+        phs=phs+180
+    newfid2=add_phase(infloat.fids*np.exp(-1j*infloat.t*fs*2*np.pi),phs)
+    outdat=indat.copy()
+    outdat.fids[:,1]=newfid2
+    outdat.flags['freqcorrected']=True
+    return outdat,fs,phs
+    
+def op_alignMPSubpsecs_fd(indat,minppm,maxppm,mode='o',initPars=None,ppmWeights=None):
+    outdat,fs,phs=op_alignMPSubpsecs(indat,mode=mode,initPars=initPars,ppmWeights=ppmWeights,freq_range=[minppm,maxppm])
+    return outdat,fs,phs
+
+def op_alignrcvrs(indat,phasept=0,mode='w',coilcombos=None):
+    # I want to check if this code is mostly the same as addrcvrs (which, actually
+    # calls op_coilcombos now, so, yes, I think it's the same ecept for maybe a 
+    # normalization factor). If so then I should separate out the common part rather
+    # than rewriting and having code that does the same thing in two places
+    pass
+
+def op_ampScale(indat1,A):
     """
+    Scale the amplitude of a spectrum by factor A. This function exists for 
+    those replicating Matlab work. However, the __mult__ method is defined for 
+    the FID object so that users can just call A*indat1 directly.
 
     Parameters
     ----------
-    indat : FID object
-        input fid object, where indat.fids contain all data to be aligned.
-    fmin : float, optional
-        minimum frequency for spectral alignment in ppm. The default is 2.8.
-    fmax : float, optional
-        maximum frequency for spectral alignment in ppm. The default is 3.1.
-    ref : char, optional
-        indicates what to align  scans to. Choices are 'first' (first input) or
-        'avg' (average of inputs). The default is 'first'.
-    mode : char optional
-        what to align: 'f' is frequency align only; 'p' is phase align only;
-        'fp' is frequency and phase align. The default is 'fp'.
+    indat1 : FID object
+        Spectrum to scale.
+    A : float
+        Amplitude scaling factor
 
     Returns
     -------
-    outdat : TYPE
-        DESCRIPTION.
-
+    outdat : FID object
+        The output resulting from amplitude scaling.
     """
-    # first I need to go have a look at op_alignScans. Not sure what the freqPhseShiftNext
-    # parts are doing.
-    outdat=indat.copy()
-    if ref=='first':
-        #how to set this up to pick up the averaging dimension? I think I did this before
-        refscan=indat.specs[:,0]
-    elif ref=='avg':
-        refscan=np.mean(indat.specs,axis=indat.dims['averages'])
-    specs=indat.specs.copy()
-    phvec=np.zeros([specs.shape[indat.dims['averages']],])
-    frqvec=np.zeros([specs.shape[indat.dims['averages']],])
-    # I think actually that I need to write op_align_scans first and figure out how that works
-    return outdat
+    return A*indat1
 
 def op_autophase(indat,ppmmin,ppmmax,ph=0):
     if not indat.flags['zeropadded']:
@@ -369,15 +698,61 @@ def op_averaging(indat):
         outdat=indat.copy()
         # average spectrum along averages dimension (previously it was a sum and divide by shape, but why?)
         outdat.fids=np.mean(indat.fids,axis=indat.dims['averages']).squeeze()
-        if outdat.fids.ndim==1:
-            outdat.fids=np.expand_dims(outdat.fids,axis=1)
+        # Changed this when I changed FID format to allow 1D vecs on 20250509. Untested
+        #if outdat.fids.ndim==1:
+        #    outdat.fids=np.expand_dims(outdat.fids,axis=1)
         # change dims variable and update flags
-        for eachvar in ['t','coils','subSpecs','extras']:
-            if indat.dims[eachvar]>indat.dims['averages']:
-                outdat.dims[eachvar]=indat.dims[eachvar]-1
-        outdat.dims['averages']=-1
+        outdat._remove_dim_from_dict('averages')
         outdat.averages=1
         outdat.flags['averaged']=True
+    return outdat
+
+def op_combinesubspecs(indat,mode):
+    """
+    Combine the subspectra in an acquisition either by addition or subtraction
+
+    Parameters
+    ----------
+    indat : FID object
+        Input spectrum.
+    mode : str, 'diff' or 'summ'
+        How to combine the data:
+            -'diff' adds the subspectra together.This is counter-intuitive but
+            the reason is that many "difference editing" sequences use phase
+            cycling of the readout ADC to achieve "subtraction by addition".
+            -'summ' performs a subtraction of the subspectra
+
+    Returns
+    -------
+    outdat : FID object
+        Output spectrum following combination of subspectra.
+
+    """
+    outdat=indat.copy()
+    if indat.flags['subtracted']:
+        raise Exception('ERROR: Subspectra have already been combined. Aborting!')
+    if indat.flags['isFourSteps']:
+        raise Exception('ERROR: Data with four steps must first be converted using op_fourStepCombine. Aborting!')
+    if mode=='diff':
+        # add the spectrum along the subSpecs dimension
+        newfid=np.sum(indat.fids,axis=indat.dims['subSpecs'])/indat.sz[indat.dims['subSpecs']]
+    elif mode=='summ':
+        # subtract the spectrum along the subSpecs dimension. The Matlab code uses
+        # diff but this doesn't make sense to me. If there are only 2 subSpecs,
+        # then it works (although Python will give you a singleton dimension), but
+        # in any other case, it produces a matrix with size one less than subSpecs
+        # in that dimension. So I've altered the code for Python to produce a
+        # fully subtracted spectrum across all subSpecs, regardless of size.
+        sumslice1=[slice(None)]*indat.ndim
+        sumslice1[indat.dims['subSpecs']]=slice(1,None,2)
+        sumslice0=[slice(None)]*indat.ndim
+        sumslice0[indat.dims['subSpecs']]=slice(0,None,2)
+        newfid=np.sum(indat.fids[tuple(sumslice1)]-indat.fids[tuple(sumslice0)],axis=indat.dims['subSpecs'])/indat.sz[indat.dims['subSpecs']]
+    outdat.fids=newfid
+    outdat._remove_dim_from_dict('subSpecs')
+    outdat.subSpecs=1
+    outdat.averages=indat.averages/2
+    outdat.flags['subtracted']=True
     return outdat
 
 def op_filter(indat,lb):
@@ -458,15 +833,11 @@ def op_freqrange(indat,ppmmin,ppmmax):
     fullspec=indat.specs.copy()
     outdat=indat.copy()
     indvals=np.logical_and(np.greater(indat.ppm,ppmmin),np.less(indat.ppm,ppmmax))
-    specpart=fullspec[indvals,:]
-    if np.mod(len(np.nonzero(indvals)),2)==0:
-        outdat.fids=fft(fftshift(specpart,axes=indat.dims['t']),axis=indat.dims['t'])
-    else:
-        outdat.fids=fft(np.roll(fftshift(specpart,axes=indat.dims['t']),1,axis=indat.dims['t']),axis=indat.dims['t'])
-    # this will redefine the ppm range and then need to recalculate the spectral width.
-    # There is probably a cleverer way to link these together via property decorators and setters
-    outdat._ppmmax=ppmmin; outdat._ppmmin=ppmmax
-    outdat.spectralwidth=np.abs(ppmmax-ppmmin)*(outdat.txfreq/1e6)
+    outdat.specs=fullspec[indvals,...]
+    # Need to redefine the ppm range, which is done by setting the center_freq_ppm
+    # and the spectralwidth
+    outdat.center_freq_ppm=ppmmin+(ppmmax-ppmmin)/2
+    outdat.spectralwidthppm=np.abs(ppmmax-ppmmin)
     outdat.flags['freqranged']=True
     return outdat
 
@@ -484,7 +855,80 @@ def op_freqshift(indat,fshift):
     outdat.fids=indat.fids*np.exp(-1j*t*fshift*2*np.pi)
     return outdat
     
+def op_getcoilcombos(indat,phasept=0,mode='w'):
+    """
+    Finds the relative coil phases and amplitudes for coil data in indat. The
+    result can be fed to op_addrcvrs for coil combination (although data generally
+    need to be rephased after)
 
+    Parameters
+    ----------
+    indat : FID object
+        Input data with multiple receiver info. Note that Matlab fidA allows 
+        you to enter a filename but assumes twix format. This differs from other
+        processing functions, so I'm removing that option in Python.
+    phasept : float, optional
+        Point of fid to use for phase estimation and amplitude when mode='w'. 
+        The default is 0.
+    mode : char, optional
+        Method for estiamting the coil weights and phases if not provided in 
+        coilcombos. Can be:
+            'w' - performs amplitude weighting of channels based on the max 
+                signal of each coil channel
+            'h' - performs amplitude weighting of channles based on the max signal 
+                of each coil channel divided by the square of the noise in each 
+                coil channel (as described by Hall et al. Neuroimage 2014).
+            The default is 'w'.
+
+    Returns
+    -------
+    coilcombos : dict with keys 'phs' and 'sigs'
+        The vectors of the coil phases (in degrees) used for alignment and the 
+        coil weights.
+
+    """
+    if indat.flags['addedrcvrs'] or indat.dims['coils']==-1 or indat.sz[indat.dims['coils']]==1:
+        print('WARNING: Only one receiver channel found! Coil phase will be 0.0 and coil amplitude will be 1.0.')
+        coilcombos={'phs':0, 'sigs':1}
+    else:
+        # Find the relative phases between the channels and populate the ph matrix
+        # The use of the slice object here allows this to be done for the 'coils'
+        # dimension regardless of the other dimensions in indat.dims
+        whichpts=[0]*indat.ndim
+        whichpts[indat.dims['coils']]=slice(None)
+        whichpts[indat.dims['t']]=phasept
+        # Jamie unwraps the phase in the Matlab version but only ever uses 
+        # the angle, so I'm leaving the phase wrapped for simplicity. Since
+        # phs is returned, it may be used for used later and would look 
+        # different when plotted
+        phs=np.angle(indat.fids[tuple(whichpts)])*180/np.pi
+        if mode=='w':
+            sigs=np.abs(indat.fids[tuple(whichpts)])
+        elif mode=='h':
+            whichpts[indat.dims['t']]=slice(None)
+            S=np.max(np.abs(indat.fids[tuple(whichpts)]),axis=indat.dims['t'])
+            # -100 is copied from the Matlab code, assuming this is in the noise for the fid.
+            whichpts[indat.dims['t']]=slice(-100,None)
+            N=np.std(indat.fids[tuple(whichpts)],axis=indat.dims['t'])
+            sigs=S/(N**2)
+        else:
+            raise TypeError("ERROR: mode must have type 'w' or 'h'.")
+        # In Matlab, op_getcoilcombos normalizes so that the max signal amplitude
+        # is 1, whereas op_addrcvrs normalizes so the sum of the amplitudes is
+        # 1. Since the normalization will be done on any coilcombos dict passed
+        # to op_addrcvrs, I'm replicating the Matlab code here - which normalizes 
+        # to the max - for consistency, but this makes less sense to me.
+        sigs=sigs/np.max(sigs)
+        coilcombos={'phs':phs,'sigs':sigs}
+    return coilcombos
+
+def op_getPeakHeight(indat,ppmmin=1.8,ppmmax=2.2):
+    datsize=indat.specs.shape
+    peak_mask=np.where((indat.ppm>ppmmin) & (indat.ppm<ppmmax),1,0)
+    peak_mask=np.tile(peak_mask,list(datsize[1:])+[1]).transpose([len(datsize)-1]+[d for d in range(len(datsize)-1)])
+    peak_height=np.amax(peak_mask*np.abs(indat.specs),axis=indat.dims['t'])
+    return peak_height
+    
 def op_gaussian(ppm,amp,fwhm,ppm0,base_off=0,ph0=0):
     if type(amp) is int:
         amp=[amp]
@@ -524,10 +968,7 @@ def op_median(indat):
         # add the spectrum along the averages dimension
         outdat.fids=np.median(indat.fids,axis=indat.dims['averages']).squeeze()
         # change dims variable and update flags
-        for eachvar in ['t','coils','subSpecs','extras']:
-            if indat.dims[eachvar]>indat.dims['averages']:
-                outdat.dims[eachvar]=indat.dims[eachvar]-1
-        outdat.dims['averages']=-1
+        outdat._remove_dim_from_dict('averages')
         outdat.averages=1
         outdat.flags['averaged']=True
         outdat.flags['writtentostruct']=True
@@ -554,6 +995,8 @@ def op_multi_peakFit(inspec,ppm,amp,fwhm,ppm0,base_off,ph0,ppmmin=0,ppmmax=4.2,p
     parsGuess=amp+fwhm+ppm0+[base_off,ph0]
     lb=[0]*len(amp)+[1e-4]*len(amp)+[ppmmin]*len(amp)+[-1*np.amax(inspec)/2,-np.pi]
     ub=[2*np.amax(inspec)]*len(amp)+[0.4]*len(amp)+[ppmmax]*len(amp)+[np.amax(inspec)/2,np.pi]
+    #ub[16]=0.2
+    #ub[17]=0.2
     def unpack_vars(ppm1,*varlist):
         amplist=list(varlist[:namp])
         fwhmlist=list(varlist[namp:2*namp])
@@ -661,6 +1104,18 @@ def op_rm_bad_averages(indat,nsd=3,which_domain='t'):
         outdat.flags['writtentostruct']=1
     return outdat,metric,badAverages
 
+def op_takesubspec(indat,idx):
+    if indat.flags['subtracted']:
+        raise Exception('ERROR: Subspectra have already been combined. ABORTING!')
+    if indat.dims['subSpecs']>-1:
+        raise Exception('ERROR: There are no subspectra in this dataset. ABORTING!')
+    subspec_slice=[slice(None)]*indat.ndim
+    subspec_slice[indat.dims['subSpecs']]=idx
+    # subspec dimension should be automatically removed from outdat.dims by __getitem__
+    outdat=indat[tuple(subspec_slice)]
+    outdat.subSpecs=1
+    return outdat
+
 def op_zeropad(indat,zpfact):
     outdat=indat.copy()
     if indat.flags['zeropadded']:
@@ -676,11 +1131,30 @@ def op_zeropad(indat,zpfact):
     # spectralwidth, which should be unchanged here, and len(specs), which will
     # be adjusted. So no need to recalculate.
     outdat.flags['zeropadded']=True
-    return outdat    
+    return outdat
 
-if __name__ == '__main__':
-    """
-    for debugging
-    """
-    pass
-    
+def op_plotspec(indat,xlims=[4.5,0],xlab='Chemical Shift (ppm)',ylab='Signal',title='',plotax=None):
+    # Need to update to deal with multiple averages and other possible dimensions, as in Matlab op_plotspec
+    if plotax is None:
+        [f1,plotax]=plt.subplots(1,1)
+    # Two cases: a list of FID objects, or a single FID object that may have 2+dimensions
+    if type(indat)==list:
+        # Check that every entry in the list is of effective size 1
+        if any([eachit.fids.ndim>2 for eachit in indat]) or any([eachit.fids.ndim==2 and (not (1 in eachit.sz)) for eachit in indat]):
+            print("List entries cannot have more than 1 dimension. Did you forget to average?")
+        else:
+            for eachit in indat:
+                plotax.plot(eachit.ppm,np.real(eachit.specs))
+            plotax.set_xlim(xlims)
+            plotax.set_xlabel(xlab)
+            plotax.set_ylabel(ylab)
+            plotax.set_title(title)
+    else:
+        if indat.fids.ndim>2:
+            print("Cannot plot for more than two dimensions")
+        else:
+            plotax.plot(indat.ppm,np.real(indat.specs))
+            plotax.set_xlim(xlims)
+            plotax.set_xlabel(xlab)
+            plotax.set_ylabel(ylab)
+            plotax.set_title(title)
