@@ -14,28 +14,9 @@ import os
 import numpy as np
 from scipy.fft import fftshift, ifft, fft
 from datetime import date
+GAMMAP=42577000
 import matplotlib.pyplot as plt
-# Should I just import selected functions?
 import fidA_processing as fop
-GAMMA_DICT=fop.GAMMA_DICT
-
-def get_default_flag_dict():
-    flag_dict={'getftshifted': False,
-     'filtered': False,
-     'zeropadded': False,
-     'freqcorrected': False,
-     'phasecorrected': False,
-     'subtracted': False,
-     'writtentotext': False,
-     'downsampled': False,
-     'avgNormalized': False,
-     'isFourSteps': False,
-     'leftshifted': False,
-     'writtentostruct': False,
-     'gotparams': False,
-     'averaged': False,
-     'addedrcvrs': False}
-    return flag_dict
 
 class FID(object):
     """
@@ -48,113 +29,65 @@ class FID(object):
     from existing attributes
     These objects can be processed using the functions in fidA_processing.
     """
-    def __init__(self,fids,raw_avgs,spectralwidth,txfreq,te,tr,sequence=None,subSpecs=None,rawSubspecs=None,pts_to_left_shift=0,flags=None,dims=None,hdr=None,hdr_ext=None,nucleus=['1H'],center_freq_ppm=4.65):
+    def __init__(self,fids,raw_avgs,spectralwidth,txfreq,te,tr,sequence=None,subSpecs=None,rawSubspecs=None,pts_to_left_shift=0,flags=None,dims=None):
         """
         FID(fids,raw_avgs,spectralwidth,txfreq,te,tr,sequence=None,subSpecs=None,rawSubspecs=None,pts_to_left_shift=0,flags=None,dims=None))
 
         """
         self.fids=fids
-        # Want to fix this so that dims and flags are mandatory and the work is being
-        # done in nii_to_mrs??
         if dims:
-            self.dims=dims
+            self.dims=dims.copy()
         else:
-            self.dims={'t':0}
+            self.dims={'t':0,'averages':-1,'subSpecs':-1}
         self.spectralwidth=spectralwidth
-        self.nii_mrs=dict()
-        if hdr is None:
-            self.nii_mrs['hdr']={'hdr_text':'no header file'}
-        else:
-            self.nii_mrs['hdr']=hdr
-        if hdr_ext is None:
-            self.nii_mrs['hdr_ext']={'hdr_ext_text':'no header extension'}
-        else:
-            self.nii_mrs['hdr_ext']=hdr_ext
-        self.nucleus=nucleus
         self.txfreq=txfreq
-        self._GAMMA=GAMMA_DICT[self.nucleus[0].upper()]*1e6
         self.te=te
         self.tr=tr
         self.sequence=sequence
         self.date=date.today()
-        self.rawAverages=raw_avgs
-        self.averages=raw_avgs
         self.subSpecs=subSpecs
+        if self.dims['subSpecs']!=-1 and self.dims['averages']==-1:
+            self.averages=raw_avgs
+            self.rawAverages=1
+        else:
+            self.averages=raw_avgs
+            self.rawAverages=raw_avgs
         self.rawSubspecs=rawSubspecs
         self.pointsToLeftshift=pts_to_left_shift
-        self.added_ph0=0 #this may need to be a vector for rawdata files with multiple averages). Or may not be needed at all?
+        self.added_ph0=0 #this may need to be a vector for rawdata files with multiple averages)
         self.added_ph1=0
-        self.center_freq_ppm=center_freq_ppm
+        self._ppmmin=4.65+self.spectralwidth/(self.txfreq/1e6)/2
+        self._ppmmax=4.65-self.spectralwidth/(self.txfreq/1e6)/2
         if flags:
             self.flags=flags.copy()
         else:
-            self.flags=get_default_flag_dict()
+            flagpars=['getftshifted','filtered','zeropadded','freqcorrected','phasecorrected',
+                      'addedrcvrs','subtracted','writtentotext','downsampled','avgNormalized',
+                      'isFourSteps']
+            self.flags={parnm:False for parnm in flagpars}
             self.flags['writtentostruct']=True
             self.flags['gotparams']=True
-            if self.dims['coils']==-1:
-                self.flags['addedrcvrs']=True
-            if self.dims['averages']==-1:
-                self.flags['averaged']=True
-            if self.dims['subSpecs']==-1:
-                self.flags['isFourSteps']=True
-            else:
-                self.flags['isFourSteps']=(self.fids.shape[self.dims['subSpecs']]==4)
+            self.flags['addedrcvrs']=True
+        if raw_avgs is None or raw_avgs==1:
+            self.flags['averaged']=True
+        else:
+            self.flags['averaged']=False
     @property
     def specs(self):
         return fftshift(ifft(self.fids,axis=self.dims['t']),axes=self.dims['t'])
-    @specs.setter
-    def specs(self,newspec):
-        # Set the fids object to the Fourier transform of the input newspec.
-        # Note that ppm, etc are not adjusted, so you could create issues if
-        # newspec has different spectral width, etc.
-        print("Setting fids based on input specs. Please ensure spectral width and resolution match initial spectrum. No check on this is run.")
-        if np.mod(newspec.shape[self.dims['t']],2)==0:
-            self.fids=fft(fftshift(newspec,axes=self.dims['t']),axis=self.dims['t'])
-        else:
-            # From Matlab: have to do a circshift when the length of fids is 
-            # odd so you don't introduce a small frequency shift into fids
-            self.fids=fft(np.roll(fftshift(newspec,axes=self.dims['t']),1,axis=self.dims['t']),axis=self.dims['t'])
-    @property
-    def GAMMA(self):
-        return self._GAMMA
-    @GAMMA.setter
-    def GAMMA(self,newGAMMA):
-        # I debated whether this needed a setter since the idea will be to read
-        # in the nucleus and then use a dict since the gyromagnetic ratios are
-        # all known constants, but seems better to have this flexibility in case
-        # I miss something. Note GAMMA should be in Hz.
-        self._GAMMA=newGAMMA
     @property
     def Bo(self):
-        return self.txfreq/self.GAMMA
-    @Bo.setter
-    def Bo(self,newBo):
-        self.txfreq=newBo*self.GAMMA
+        return self.txfreq/GAMMAP
     @property
     def spectralwidthppm(self):
         return self.spectralwidth/(self.txfreq/1e6)
-    @spectralwidthppm.setter
-    def spectralwidthppm(self,new_sw_ppm):
-        self.spectralwidth=new_sw_ppm*(self.txfreq/1e6)
-    @property
-    def _ppmmin(self):
-        return self.center_freq_ppm+self.spectralwidthppm/2
-    @property
-    def _ppmmax(self):
-        return self.center_freq_ppm-self.spectralwidthppm/2
     @property
     def ppm(self):
-        # to do the equivalent of what I've done with "t", I want to define ppm
-        # in terms of center frequency, spectralwidth and self.specs.shape[0] and
-        # any attempt to set it would adjust these three things (or, well, just
-        # the center frequency and spectralwidth I think)
-        return np.linspace(self._ppmmin,self._ppmmax,self.specs.shape[self.dims['t']])
+        self._ppm=np.linspace(self._ppmmin,self._ppmmax,len(self.specs))
+        return self._ppm
     @property
     def dwelltime(self):
         return 1/self.spectralwidth
-    @dwelltime.setter
-    def dwelltime(self,newdwell):
-        self.spectralwidth=1/newdwell
     @property
     def t(self):
         #t2=np.r_[0:self.fids.shape[self.dims['t']]*self.dwelltime:self.dwelltime]
@@ -166,9 +99,6 @@ class FID(object):
     @property
     def sz(self):
         return self.specs.shape
-    @property
-    def ndim(self):
-        return len(self.sz)
     def __mul__(self,mult1):
         if isinstance(mult1, FID):
             out1=self.copy()
@@ -222,67 +152,15 @@ class FID(object):
             raise TypeError(f"sorry, don't know how to multiply by {type(mult1).__name__}")
     def __truediv__(self,mult1):
         return self.__div__(mult1)
-    def __repr__(self):
-        dimlist=list()
-        for kct in range(self.ndim):
-            dimlist.append(self.get_dimnm_from_idx(kct))
-        return '{:s} has fids size {:s} and dimensions {:s}'.format(type(self).__name__,str(self.sz),str(dimlist))
-    def __contains__(self,item):
-        if item in self.dims:
-            if self.dims[item]>-1:
-                return True
-        return False
-    def __getitem__(self, key):
-        outdat=self.copy()
-        outdat.fids=outdat.fids[key]
-        for keyct,eachdim in enumerate(key):
-            if type(eachdim) is int:
-                # find the dims variable with that dimension
-                dimnm=outdat.get_dimnm_from_idx(keyct)#[dimnm for dimnm,dimidx in self.dims.items() if dimidx==keyct][0]
-                # change this dimval to -1 and decrease all dimensions above
-                outdat._remove_dim_from_dict(dimnm)
-        return outdat
-    def __setitem__(self, key, newfid):
-        # Note: does not currently allow number of dimensions to change.
-        if self.ndim != newfid.ndim:
-            raise Exception('ERROR: Assigning to slice of FID object cannot alter number of dimensions. \n self.ndim={:d}, newfid.ndim={:d}'.format(self.ndim,newfid.ndim))
-        self.fids[key]=newfid
-    
-    def _remove_dim_from_dict(self,key):
-        # I figure that this should be a private method, since users should not
-        # generally be removing dimensions from the dictionary because they need
-        # to match the dimensions of self.fids. However, there are many fidA_processsing
-        # functions that involve removing a dimension (eg. op_addrcvrs removes 
-        # the 'coil' dimension), so I've made it single underscore. Please code 
-        # responsibly.
-        # Set the indicated dimension from self.dims to -1 and reduce the index
-        # for each dimension above it by 1. No return value
-        for dimnm in self.dims.keys()[::-1]:
-            if self.dims[dimnm]==self.dims[key]:
-                self.dims[dimnm]=-1
-            elif self.dims[dimnm]>self.dims[key]:
-                self.dims[dimnm]=self.dims[dimnm]-1
-                
-    def get_dimnm_from_idx(self, idx):
-        keynm_list=[kn for kn,dval in self.dims.items() if dval==idx]
-        if len(keynm_list)==0:
-            print('No dimenions with index {:d} in dims. Returning value None'.format(idx))
-            return None
-        elif len(keynm_list)==1:
-            return keynm_list[0]
-        else:
-            raise Exception('ERROR: More than one key with dimension {:d}'.format(idx))
-        
     def copy(self):
-        newfid=FID(self.fids.copy(),self.rawAverages,self.spectralwidth,self.txfreq,
-                   self.te,self.tr,self.sequence,self.subSpecs,self.rawSubspecs,
-                   self.pointsToLeftshift,self.flags.copy(),self.dims.copy(),
-                   self.nii_mrs['hdr'].copy(),self.nii_mrs['hdr_ext'].copy(),
-                   self.nucleus,self.center_freq_ppm)
+        newfid=FID(self.fids,self.rawAverages,self.spectralwidth,self.txfreq,
+                   self.te,self.tr,self.sequence,self.subSpecs,
+                   self.rawSubspecs,self.pointsToLeftshift,self.flags.copy())
+        newfid.dims=self.dims.copy()
         newfid.date=date.today()
         newfid.averages=self.averages
         return newfid
-    def plot_spec(self,xlims=[4.5,0],xlab='Chemical Shift (ppm)',ylab='Signal',title='',plotax=None, **kwargs):
+    def plot_spec(self,xlims=[4.5,0],xlab='Chemical Shift (ppm)',ylab='Signal',title='',plotax=None):
         # Need to update to deal with multiple averages and other possible dimensions, as in Matlab op_plotspec
         if plotax is None:
             [f1,plotax]=plt.subplots(1,1)
@@ -296,23 +174,44 @@ class FID(object):
             spec_for_plot=np.real(fop.op_averaging(self).specs)
         else:
             spec_for_plot=np.real(self.specs)
-        plotax.plot(self.ppm,spec_for_plot,**kwargs)
+        plotax.plot(self.ppm,spec_for_plot)
         plotax.set_xlim(xlims)
         plotax.set_xlabel(xlab)
         plotax.set_ylabel(ylab)
         plotax.set_title(title)
-
-def fid_from_specs(oldspec):
-    # Should this be here or in processing? Currently only called in io_bruker_load
-    # when loading 2dseq but may be needed for other vendors and formats??
-    # Need to recalculate fid from spec, but you have to do a circshift when the
-    # length of fids is odd so you don't introduce a small frequency shift into fids
-    # Function assumes that time is the first dimension.
-    if np.mod(oldspec.shape[0],2)==0:
-        newfids=fft(fftshift(oldspec,axes=0),axis=0)
-    else:
-        newfids=fft(np.roll(fftshift(oldspec,axes=0),1,axis=0),axis=0)
-    return newfids
+    def add_ph0(self,ph0):
+        # Note that this is a permanent change to the FID object. To test different phases, use op_add_phase
+        self.fids=self.fids*np.exp(1j*ph0*np.pi/180)
+        self.added_ph0=self.added_ph0+ph0
+        self.flags['phasecorrected']=True
+    def add_ph1(self,ph1,ppm0=4.65):
+        # Note that this is a permanent change to the FID object. To test different phases, use op_add_phase
+        newspec=fop.add_phase1(self.specs,self.ppm,ph1,ppm0,self.Bo)
+        self.set_fid_from_specs(newspec)
+        self.added_ph1=self.added_ph1+ph1
+        self.flags['phasecorrected']=True
+    def do_averaging(self):
+        tmpfid=fop.op_averaging(self.copy())
+        self.fids=tmpfid.fids
+        self.dims=tmpfid.dims
+        self.flags=tmpfid.flags
+        self.averages=1
+    def autophase(self,ppm1=1.9,ppm2=2.1,phstart=0):
+        # Permanent change. Default is to use the NAA peak
+        newfid, phnew=fop.op_autophase(self.copy(),ppm1,ppm2,ph=phstart)
+        self.fids=newfid.fids
+        self.added_ph0=newfid.added_ph0
+    def set_fid_from_specs(self, newspec):
+        # Need to recalculate fid from spec, but you have to do a circshift when the
+        # length of fids is odd so you don't introduce a small frequency shift into fids
+        # Note that newspec should be calculated from the existing specs but this is not checked.
+        # Could create problems if newspec doesn't match existing ppm, etc.
+        # Also note that this function SETS self.fids. It DOES NOT return a FIDS object
+        # If you're getting errors, check that you are not calling the function expecting a return
+        if np.mod(newspec.shape[self.dims['t']],2)==0:
+            self.fids=fft(fftshift(newspec,axes=self.dims['t']),axis=self.dims['t'])
+        else:
+            self.fids=fft(np.roll(fftshift(newspec,axes=self.dims['t']),1,axis=self.dims['t']),axis=self.dims['t'])
     
 def get_par(fname,parname,vartype='float'):
     """
@@ -537,9 +436,7 @@ def io_loadspec_bruk(inDir,spectrometer=False,try_raw=False,info_dict=False,ADC_
         if coildim!=-1:
             fids=np.transpose(np.reshape(fids,[-1,raw_avgs,ncoil]),[0,2,1])
             #fids=np.reshape(fids,[-1,ncoil,raw_avgs])
-        # Broken for this. Hard-coding the dimensions.
-        tmpdim={'t': 0, 'averages': 2, 'subSpecs': -1, 'coils': 1, 'extras': -1}
-        fid1=FID(fids,raw_avgs,spectralwidth,txfrq,te,tr,sequence,subSpecs,rawSubspecs,dims=tmpdim)
+        fid1=FID(fids,raw_avgs,spectralwidth,txfrq,te,tr,sequence,subSpecs,rawSubspecs)
         fid1.dims['averages']=avgdim
         fid1.dims['t']=0
         fid1.dims['coils']=coildim
