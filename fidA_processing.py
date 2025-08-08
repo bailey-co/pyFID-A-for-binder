@@ -183,10 +183,10 @@ def op_addrcvrs(indat,phasept=0,mode='w',coilcombos=None):
             # Jamie unwraps the phase in the Matlab version but only ever uses the angle. Maybe for viewing? Leaving it wrapped for now
             phs=[np.angle(avfids[phasept,nct,0,0])*180/np.pi for nct in range(avfids.shape[1])]
             if mode=='w':
-                sigs=np.abs(avfids[phasept,:,0,0])
+                sigs=np.abs(avfids[phasept,:,0])
             elif mode=='h':
-                S=np.max(np.abs(avfids[:,:,0,0]),axis=0)
-                N=np.std(avfids[-100:,:,0,0],axis=0)
+                S=np.max(np.abs(avfids[:,:,0]),axis=0)
+                N=np.std(avfids[-100:,:,0],axis=0)
                 sigs=S/(N**2)
         else:
             phs=coilcombos['phs']
