@@ -257,7 +257,7 @@ class FID(object):
         # responsibly.
         # Set the indicated dimension from self.dims to -1 and reduce the index
         # for each dimension above it by 1. No return value
-        for dimnm in self.dims.keys():
+        for dimnm in self.dims.keys()[::-1]:
             if self.dims[dimnm]==self.dims[key]:
                 self.dims[dimnm]=-1
             elif self.dims[dimnm]>self.dims[key]:
