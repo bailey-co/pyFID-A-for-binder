@@ -531,7 +531,8 @@ def io_loadspec_bruk(inDir,spectrometer=False,try_raw=False,info_dict=False,ADC_
         if coildim!=-1:
             fids=np.transpose(np.reshape(fids,[-1,raw_avgs,ncoil]),[0,2,1])
             #fids=np.reshape(fids,[-1,ncoil,raw_avgs])
-        fid1=FID(fids,raw_avgs,spectralwidth,txfrq,te,tr,sequence,subSpecs,rawSubspecs)
+        # Broken for this. Hard-coding the dimensions.
+        fid1=FID(fids,raw_avgs,spectralwidth,txfrq,te,tr,sequence,subSpecs,rawSubspecs,dims={'t':0,'coils':1,'averages':2})
         fid1.dims['averages']=avgdim
         fid1.dims['t']=0
         fid1.dims['coils']=coildim
