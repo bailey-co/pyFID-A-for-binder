@@ -157,7 +157,7 @@ def op_addphaseSubspec(indat,ph0):
     return outdat
     
 def op_addrcvrs(indat,phasept=0,mode='w',coilcombos=None):
-    if indat.flags['addedrcvrs'] or indat.dims['coils']>-1:
+    if indat.flags['addedrcvrs'] or indat.dims['coils']==-1:
         print('WARNING:  Only one receiver channel found!  Returning input without modification!')
         outdat=indat.copy()
         outdat.flags['addedrcvrs']=1
