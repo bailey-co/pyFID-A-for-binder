@@ -14,7 +14,6 @@ import os
 import numpy as np
 from scipy.fft import fftshift, ifft, fft
 from datetime import date
-import BrukerReader
 import matplotlib.pyplot as plt
 # Should I just import selected functions?
 import fidA_processing as fop
