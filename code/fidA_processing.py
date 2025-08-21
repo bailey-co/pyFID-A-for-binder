@@ -1565,25 +1565,4 @@ if __name__ == '__main__':
     """
     for debugging
     """
-    import fidA_io as fio
-    import os
-    # pname='/Users/nearlabmacbook1/Documents/BrukerData/SchuurmansMice'
-    # fct=2
-    # with open(os.path.join(pname,'flist_smallvox_right')) as f:
-    #     ftmp=f.readlines()
-    #     fright=[fn.strip() for fn in ftmp if fn.startswith('2024')]
-    # with open(os.path.join(pname,'flist_smallvox_left')) as f:
-    #     ftmp=f.readlines()
-    #     fleft=[fn.strip() for fn in ftmp if fn.startswith('2024')]
-    # out_left,ref_left,info_left=fio.io_loadspec_bruk(os.path.join(pname,fleft[fct]),try_raw=False)
-    # out_right,ref_right,info_right=fio.io_loadspec_bruk(os.path.join(pname,fright[fct]),try_raw=False)
-    # f1,ax1=plt.subplots(1,2)
-    # out_left.plot_spec(plotax=ax1[0])
-    # out_right.plot_spec(plotax=ax1[0])
-    # new_right, ph1, frq1=op_align_scans(out_left, out_right)
-    # out_left.plot_spec(plotax=ax1[1])
-    # new_right.plot_spec(plotax=ax1[1])
-    
-    pname='/Users/nearlabmacbook1/Documents/BrukerData/FUS_pentobarbital/20240916_133721_SKWU1A_Sept16_2024_RK50_HL_SKWU1A_Sept16_20_1_4'
-    fid1=fio.io_loadspec_bruk(os.path.join(pname,'5','rawdata.job0'))
-    outdat,fids_presum,specs_presum,coilcombos=op_addrcvrs(fid1)
+    pass
