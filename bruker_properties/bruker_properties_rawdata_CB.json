@@ -1,0 +1,177 @@
+{
+    "SpectrometerFrequency": [
+      {
+        "cmd": "[#BF1,]",
+        "conditions": ["@type=='rawdata'"]
+      }
+    ],
+    "ResonantNucleus": [
+      {
+        "cmd": "[#NUCLEUS[1:-1]]",
+        "conditions": ["@type=='rawdata'"]
+      }
+    ],
+    "is_spectroscopy": [
+      {
+        "cmd": "'Spectroscopic' in #ACQ_dim_desc.list",
+        "conditions": ["@type=='rawdata'"]
+      }
+    ],
+    "is_complex": [
+      {
+        "cmd": "True",
+        "conditions": [
+          "@type=='rawdata'"
+        ]
+      },
+      {
+        "cmd": "False",
+        "conditions": [
+        ]
+      }
+    ],
+    "is_mrsi": [
+      {
+        "cmd": "True",
+        "conditions": [
+          "@type=='rawdata'",
+          "#ACQ_dim_desc.list==['Spectroscopic', 'Spatial', 'Spatial']"
+        ]
+      },
+      {
+        "cmd": "False",
+        "conditions": []
+      }
+    ],
+    "is_svs": [
+      {
+        "cmd": "True",
+        "conditions": [
+          "@type=='rawdata'",
+          "#ACQ_dim_desc.list==['Spectroscopic',]"
+        ]
+      },
+      {
+        "cmd": "False",
+        "conditions": []
+      }
+    ],
+    "points_prior_to_echo": [
+      {
+        "cmd": "#PVM_DigShift",
+        "conditions": ["@type=='rawdata'"]
+      },
+      {
+        "cmd": "int(np.round(#ACQ_RxFilterInfo[0][0]))",
+        "conditions": ["@type=='rawdata'",
+                      ["#ACQ_sw_version",["<PV-360.1.1>"]]]
+      },
+      {
+        "cmd": "0",
+        "conditions": []
+      }
+    ],
+    "method_desc": [
+      {
+        "cmd": "#Method",
+        "conditions": ["@type=='rawdata'"]
+      }
+    ],
+    "PV_version": [
+      {
+        "cmd": "#ACQ_sw_version",
+        "conditions": ["@type=='rawdata'"]
+      }
+    ],
+    "working_offset": [
+      {
+        "cmd": "#PVM_FrqWorkOffsetPpm",
+        "conditions": []
+      }
+    ],
+    "method_TE": [
+      {
+        "cmd": "#PVM_EchoTime",
+        "conditions": ["@type=='rawdata'"],
+        "unit": "ms"
+      }
+    ],
+    "method_TR": [
+      {
+          "cmd": "#PVM_RepetitionTime",
+          "conditions": ["@type=='rawdata'"],
+          "unit": "ms"
+      }
+    ],
+    "sw_hz": [
+    {
+        "cmd": "#SW_h",
+        "conditions": ["@type=='rawdata'"]
+    }
+  ],
+  "dwell_s": [
+    {
+        "cmd": "1./ @sw_hz",
+        "conditions": ["@type=='rawdata'"]
+    }
+  ],
+  "TR": [
+    {
+        "cmd": "#PVM_RepetitionTime",
+        "conditions": ["@type=='rawdata'"],
+        "unit": "ms"
+    }
+  ],
+  "TE": [
+    {
+        "cmd": "#PVM_EchoTime",
+        "conditions": ["@type=='rawdata'"],
+        "unit": "ms"
+    }
+  ],
+  "subj_id": [
+    {
+      "cmd": "''",
+      "conditions": ["@type=='rawdata'"]
+    }
+  ],
+  "study_id": [
+    {
+      "cmd": "''",
+      "conditions": ["@type=='rawdata'"]
+    }
+  ],
+  "exp_id": [
+    {
+      "cmd": "@path.parent.name",
+      "conditions": [
+
+      ]
+    },
+    {
+      "cmd": "''",
+      "conditions": [
+
+      ]
+    }
+  ],
+  "id": [
+    {
+      "cmd": "'FID_{}_{}_{}'.format(@exp_id, @subj_id, @study_id)",
+      "conditions": ["@type=='rawdata'"]
+    }
+  ],
+  "date": [
+    {
+        "cmd": "datetime.datetime.strptime(#ACQ_time,'<%Y-%m-%dT%X,%f%z>')",
+        "conditions": [
+          "#ACQ_sw_version=='<PV 6.0.1>'","@type=='rawdata'"
+        ]
+    },
+    {
+        "cmd": "datetime.datetime.strptime(#ACQ_time,'<%H:%M:%S %d %b %Y>')",
+        "conditions": ["#ACQ_sw_version=='<PV 5.1>'","@type=='rawdata'"
+        ]
+    }
+  ]
+  }

@@ -1,0 +1,166 @@
+{
+    "SpectrometerFrequency": [
+      {
+        "cmd": "[#VisuAcqImagingFrequency,]",
+        "conditions": ["@type=='2dseq'"]
+      },
+      {
+        "cmd": "[#BF1,]",
+        "conditions": ["@type=='fid'"]
+      }
+    ],
+    "ResonantNucleus": [
+      {
+        "cmd": "[#NUCLEUS[1:-1]]",
+        "conditions": ["@type=='fid'"]
+      },
+      {
+        "cmd": "[#VisuAcqImagedNucleus[1:-1]]",
+        "conditions": ["@type=='2dseq'"]
+      }
+    ],
+    "is_spectroscopy": [
+      {
+        "cmd": "'spectroscopic' in #VisuCoreDimDesc.list",
+        "conditions": ["@type=='2dseq'"]
+      },
+      {
+        "cmd": "'Spectroscopic' in #ACQ_dim_desc.list",
+        "conditions": ["@type=='fid'"]
+      }
+    ],
+    "is_complex": [
+      {
+        "cmd": "True",
+        "conditions": [
+          "#VisuCoreFrameType.list[0]=='REAL_IMAGE'"
+        ]
+      },
+      {
+        "cmd": "True",
+        "conditions": [
+          "@type=='fid'"
+        ]
+      },
+      {
+        "cmd": "False",
+        "conditions": [
+        ]
+      }
+    ],
+    "is_mrsi": [
+      {
+        "cmd": "True",
+        "conditions": [
+          "@type=='2dseq'",
+          "#VisuCoreDimDesc.list==['spectroscopic', 'spatial', 'spatial']"
+        ]
+      },
+      {
+        "cmd": "True",
+        "conditions": [
+          "@type=='fid'",
+          "#ACQ_dim_desc.list==['Spectroscopic', 'Spatial', 'Spatial']"
+        ]
+      },
+      {
+        "cmd": "False",
+        "conditions": []
+      }
+    ],
+    "is_svs": [
+      {
+        "cmd": "True",
+        "conditions": [
+          "@type=='2dseq'",
+          "#VisuCoreDimDesc.list==['spectroscopic',]"
+        ]
+      },
+      {
+        "cmd": "True",
+        "conditions": [
+          "@type=='fid'",
+          "#ACQ_dim_desc.list==['Spectroscopic',]"
+        ]
+      },
+      {
+        "cmd": "False",
+        "conditions": []
+      }
+    ],
+    "points_prior_to_echo": [
+      {
+        "cmd": "#PVM_DigShift",
+        "conditions": ["@type=='fid'"]
+      },
+      {
+        "cmd": "int(np.round(#ACQ_RxFilterInfo[0][0]))",
+        "conditions": ["@type=='fid'",
+                      ["#ACQ_sw_version",["<PV-360.1.1>"]]]
+      },
+      {
+        "cmd": "0",
+        "conditions": []
+      }
+    ],
+    "method_desc": [
+      {
+        "cmd": "#Method",
+        "conditions": ["@type=='fid'"]
+      },
+      {
+        "cmd": "#VisuAcquisitionProtocol",
+        "conditions": ["@type=='2dseq'"]
+      }
+    ],
+    "PV_version": [
+      {
+        "cmd": "#ACQ_sw_version",
+        "conditions": ["@type=='fid'"]
+      },
+      {
+        "cmd": "#VisuAcqSoftwareVersion",
+        "conditions": ["@type=='2dseq'"]
+      }
+    ],
+    "working_offset": [
+      {
+        "cmd": "#PVM_FrqWorkOffsetPpm",
+        "conditions": []
+      }
+    ],
+    "method_TE": [
+      {
+        "cmd": "#PVM_EchoTime",
+        "conditions": ["@type=='2dseq'"],
+        "unit": "ms"
+      },
+      {
+        "cmd": "#PVM_EchoTime",
+        "conditions": ["@type=='fid'"],
+        "unit": "ms"
+      }
+    ],
+    "method_TR": [
+      {
+          "cmd": "#PVM_RepetitionTime",
+          "conditions": ["@type=='2dseq'"],
+          "unit": "ms"
+      },
+      {
+          "cmd": "#PVM_RepetitionTime",
+          "conditions": ["@type=='fid'"],
+          "unit": "ms"
+      }
+    ],
+    "dwell_s": [
+    {
+        "cmd": "1./ @sw_hz",
+        "conditions": ["@type=='fid'"]
+    },
+    {
+      "cmd": "1./ (#VisuAcqPixelBandwidth * #VisuCoreSize.list[0]  / 200.)",
+      "conditions": ["@type=='2dseq'"]
+    }
+  ]
+  }
