@@ -1,3 +1,6 @@
-# spec2nii requires numpy, scipy, matplotlib and pandas so these will all be available with the spec2nii requirement
-spec2nii
+numpy==1.21.4
+scipy==1.7.2
+matplotlib==3.4.3
+pandas==1.3.3
 
+# spec2nii contains all of these but somehow will not load for binder
