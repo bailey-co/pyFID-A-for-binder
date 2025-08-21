@@ -14,7 +14,6 @@ import os
 import numpy as np
 from scipy.fft import fftshift, ifft, fft
 from datetime import date
-import BrukerReader
 import matplotlib.pyplot as plt
 # Should I just import selected functions?
 from pyFidA.code.fidA_processing import op_averaging
@@ -349,133 +348,6 @@ def get_par(fname,parname,vartype='float'):
         raw_par=line[line.find('=')+1:].strip()
     return raw_par
 
-def io_loadspec_bruk_old(inDir,spectrometer=False,try_raw=False,info_dict=False,ADC_OFFSET=68):
-    #get the original number of Repetitions (all repetitions from scanner generated as
-    #a 1D vector. Need to split before further processing
-    # Get relevant parameters (this could be done more efficiently by opening files once at the start and reading all relevant parameters from one opening)
-    if spectrometer:
-        dic1=BrukerReader.read_jcamp_spec(os.path.join(inDir,'acqu'))
-        spectralwidth=dic1['SW_h']
-        txfrq=dic1['SFO1']*1e6
-        te=-1
-        tr=-1#dic1['D'][1]*1000
-        sequence=dic1['PULPROG'][1:-1]
-        if info_dict:
-            info_dict=dic1
-        else:
-            info_dict=None
-    else:
-        spectralwidth=get_par(os.path.join(inDir,'method'),'$PVM_DigSw')
-        txfrq=get_par(os.path.join(inDir,'acqp'),'$BF1')*1e6
-        te=get_par(os.path.join(inDir,'method'),'$PVM_EchoTime')
-        tr=get_par(os.path.join(inDir,'method'),'$PVM_RepetitionTime')
-        sequence=get_par(os.path.join(inDir,'method'),'$Method','string')
-        if info_dict:
-            info_dict=BrukerReader.read_jcamp_spec(os.path.join(inDir,'method'))
-        else:
-            info_dict=None
-    # Specify the number of subspecs.  For now, this will always be one.
-    subSpecs=1; rawSubspecs=1
-    
-    def get_spec(fname,raw_avgs=None):
-        fid_data=np.fromfile(fname,dtype=np.int32)
-        # sometimes getting a 90 degree phase difference, which suggests these
-        # were backwards. Going to swap them and see
-        real_fid = fid_data[::2]
-        imag_fid = fid_data[1::2]
-        fids_raw=real_fid+1j*imag_fid
-        if fname.endswith('fid.raw') or fname.endswith('rawdata.job0'):
-            # I need more info here. When you use the 2x2 linear array, the rawdata
-            # file includes info from all 4 coils, so I should try to read that
-            # in and split it up. Not sure if there is a number of coils parameter
-            # but you could read in averages, number of points and then everything else
-            raw_avgs=get_par(os.path.join(inDir,'method'),'$PVM_NAverages','int')
-            expmode=get_par(os.path.join(inDir,'acqp'),'$ACQ_experiment_mode','string')
-            if expmode.strip()=='ParallelExperiment':
-                ncoil=int(get_par(os.path.join(inDir,'acqp'),'$ACQ_ReceiverSelect','string').split()[1])
-                coildim=1
-                avgdim=2
-                fids_raw=np.reshape(fids_raw,[raw_avgs*ncoil,-1]).T
-            else:
-                coildim=-1
-                avgdim=1
-                fids_raw=np.reshape(fids_raw,[raw_avgs,-1]).T
-            # So now the problem is that I need to reshape for the number of coils
-            # But this will affect the number of dimensions, which in turn affects
-            # the fid_trunc calculation and maybe the pad??
-        elif fname.endswith('fid'):
-            if os.path.exists(os.path.join(inDir,'method')):
-                raw_dat_pts=get_par(os.path.join(inDir,'method'),'$PVM_DigNp','int')
-            else:
-                raw_dat_pts=len(real_fid)
-            raw_avgs=int(np.shape(real_fid)[0]/raw_dat_pts)
-            if np.mod(real_fid.shape[0],raw_dat_pts)!=0:
-                print('number of repetitions cannot be accurately found')
-            fids_raw=np.reshape(fids_raw,[-1,raw_dat_pts]).T
-            avgdim=-1
-            coildim=-1
-        elif fname.endswith('fid.ref'):
-            fids_raw=np.reshape(fids_raw,[raw_avgs,-1]).T
-            avgdim=1
-            coildim=-1
-        elif fname.endswith('fid.refscan'):
-            raw_dat_pts=len(real_fid)
-            raw_avgs=1
-            if np.mod(real_fid.shape[0],raw_dat_pts)!=0:
-                print('number of repetitions cannot be accurately found for refscan file')
-            fids_raw=np.reshape(fids_raw,[-1,raw_dat_pts]).T
-            avgdim=-1
-            coildim=-1
-        try:
-            fids_trunc=fids_raw[ADC_OFFSET:,:]
-        except IndexError:
-            fids_trunc=np.expand_dims(fids_raw,axis=1)
-            fids_trunc=fids_trunc[ADC_OFFSET:,:]
-        fids=np.pad(fids_trunc, pad_width=[[0,ADC_OFFSET],[0,0]])
-        if coildim!=-1:
-            fids=np.transpose(np.reshape(fids,[-1,raw_avgs,ncoil]),[0,2,1])
-            #fids=np.reshape(fids,[-1,ncoil,raw_avgs])
-        fid1=FID(fids,raw_avgs,spectralwidth,txfrq,te,tr,sequence,subSpecs,rawSubspecs)
-        fid1.dims['averages']=avgdim
-        fid1.dims['t']=0
-        fid1.dims['coils']=coildim
-        fid1.dims['subSpecs']=-1
-        fid1.dims['extras']=-1
-        if fid1.dims['subSpecs']==0:
-            fid1.flags['isFourSteps']=0
-        else:
-            fid1.flags['isFourSteps']=(fid1.sz[fid1.dims['subSpecs']]==4)
-        return fid1,raw_avgs
-    
-    # First try to load fid.raw file. If that does not work, use regular fid
-    if try_raw:
-        try:
-            outfid,rawavg1=get_spec(os.path.join(inDir,'rawdata.job0'))
-        except FileNotFoundError:
-            outfid,rawavg1=get_spec(os.path.join(inDir,'fid.raw'))
-    else:
-        #untested since I don't have an example dataset with .raw missing
-        #print('WARNING: /fid.raw not found. Using /fid ....')
-        outfid,rawavg1=get_spec(os.path.join(inDir,'fid'))
-        
-    # NOW TRY LOADING IN THE REFERENCE SCAN DATA (IF IT EXISTS)
-    if try_raw:
-        try:
-            # this isn't correct. rawdata.job1 is actually the navigator scans, not the reference scans
-            #reffid,rawavg2=get_spec(os.path.join(inDir,'rawdata.job1'))
-            reffid=0
-        except FileNotFoundError:
-            reffid=0
-            print('Unclear on raw data reference scan filename')
-    else:
-        if os.path.isfile(os.path.join(inDir,'fid.ref')):
-            reffid,rawavg2=get_spec(os.path.join(inDir,'fid.ref'),raw_avgs=rawavg1)
-        elif os.path.isfile(os.path.join(inDir,'fid.refscan')):
-            reffid,rawavg2=get_spec(os.path.join(inDir,'fid.refscan'),raw_avgs=rawavg1)
-        else:
-            reffid=0
-    return outfid,reffid,info_dict
-
 def io_readlcmcoord(fname):
     lcm_dict=dict()
     info_dict=dict()
@@ -808,27 +680,4 @@ def io_loadspec_bruk(fname, load_ref=False, do_leftshift=True, fill_truncated_da
     return out1
 
 if __name__ == '__main__':
-    """
-    for debugging
-    """
-    #pname='/Users/nearlabmacbook1/Documents/Matlab/FID-A-master/exampleData/Bruker/sample01_press/press'
-    #pname='/Users/nearlabmacbook1/Documents/BrukerS4_Data/2022-08-24_ChaoWang_Extract_CW2A/2'
-    #out1,ref1=io_loadspec_bruk(pname,spectrometer=True)
-    #pname='/Users/nearlabmacbook1/Documents/BrukerData/StressMice/baseline/20230517_142659_768_wang_stress_c639_mL_baseline_1_1/5/'
-    #out1,ref1,info1=io_loadspec_bruk(pname,spectrometer=False,try_raw=False,ADC_OFFSET=68)
-    ##2dseq looks worse than fid or averaged rawdata for some reason
-    #fname='/Users/nearlabmacbook1/Documents/BrukerData/FUS_pentobarbital/20240916_115232_SKWU1A_Sept16_2024_RK50_HL_SKWU1A_Sept16_20_1_3/5/rawdata.job0'
-    #fname='/Users/nearlabmacbook1/Documents/BrukerData/StressMice/baseline/20230517_162843_768_wang_stress_c642_mR_baseline_1_1/5/pdata/1/2dseq'
-    #out1=io_loadspec_bruk(fname)
-    #out2,ref2,junk2=io_loadspec_bruk_old('/Users/nearlabmacbook1/Documents/BrukerData/FUS_pentobarbital/20240916_115232_SKWU1A_Sept16_2024_RK50_HL_SKWU1A_Sept16_20_1_3/5',try_raw=True)
-    #fname='/Users/nearlabmacbook1/Documents/Matlab/FID-A-master/exampleData/GE/sample01_press/press/P17920.7'
-    #out2=io_loadspec_GE(fname)pname2='/Users/nearlabmacbook1/Documents/BrukerData/Wilfred/20240425_085624_910_C5_rt_lt_ear_Baseline_1_1'
-    #pname2='/Users/nearlabmacbook1/Documents/BrukerData/Wilfred/20240425_085624_910_C5_rt_lt_ear_Baseline_1_1'
-    #outraw=io_loadspec_bruk(os.path.join(pname2,'6','rawdata.job0'))
-    fname='/Users/nearlabmacbook1/Documents/BrukerData/FUS_pentobarbital/20240916_115232_SKWU1A_Sept16_2024_RK50_HL_SKWU1A_Sept16_20_1_3/5/rawdata.job0'
-    outraw=io_loadspec_bruk(fname)
-    print(outraw.sz)
-    print(outraw.dims)
-    #outtest=outraw[:,:,:1]
-    #print(outtest.sz)
-    #print(outtest.dims)
+    pass
